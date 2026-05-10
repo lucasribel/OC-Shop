@@ -21,6 +21,7 @@ export function CheckoutDrawer({ open, onClose, conference, onSuccess }: Checkou
   const [email, setEmail] = useState('')
   const [phone, setPhone] = useState('')
   const [step, setStep] = useState<'form' | 'success' | 'duplicate'>('form')
+  const [lastOrder, setLastOrder] = useState<any>(null)
   const [existingOrder, setExistingOrder] = useState<any>(null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
@@ -97,6 +98,7 @@ export function CheckoutDrawer({ open, onClose, conference, onSuccess }: Checkou
       const cache = JSON.parse(sessionStorage.getItem('aiesec_order_cache') || '[]')
       cache.push({ orderId: order.id, conferenceSlug: conference.slug, email: email.trim() })
       sessionStorage.setItem('aiesec_order_cache', JSON.stringify(cache))
+      setLastOrder(order)
 
       clear()
       setStep('success')
@@ -128,19 +130,46 @@ export function CheckoutDrawer({ open, onClose, conference, onSuccess }: Checkou
       </div>
 
       {step === 'success' ? (
-        <div className="flex-1 flex flex-col items-center justify-center px-6 py-12 text-center">
-          <div className="w-16 h-16 rounded-full bg-green-100 flex items-center justify-center mb-4">
-            <svg className="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+        <div className="flex-1 flex flex-col items-center px-6 py-8 text-center overflow-y-auto">
+          <div className="w-14 h-14 rounded-full bg-green-100 flex items-center justify-center mb-4">
+            <svg className="w-7 h-7 text-[#00A94F]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
             </svg>
           </div>
-          <h3 className="text-xl font-bold text-gray-900 mb-2">Pedido Confirmado!</h3>
-          <p className="text-sm text-gray-500 mb-6 max-w-xs">
-            Aguarde a aprovação do organizador. O pagamento é via PIX — entre em contato com o organizador.
+
+          <h3 className="font-display text-xl font-bold text-[#1A1A2E] mb-2">Pedido registrado!</h3>
+
+          <p className="text-sm text-gray-500 leading-relaxed max-w-xs">
+            Seu pedido foi recebido com sucesso.
+            O pagamento é feito via <strong>PIX</strong> — em breve o organizador
+            da conferência entrará em contato com você pelo WhatsApp ou e-mail
+            para confirmar o pagamento.
           </p>
+
+          {lastOrder && (
+            <div className="w-full mt-5 p-4 rounded-xl bg-gray-50 space-y-2 text-left">
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-gray-500">Pedido</span>
+                <span className="font-mono text-sm font-medium text-[#1A1A2E]">#{lastOrder.id}</span>
+              </div>
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-gray-500">Total</span>
+                <span className="font-bold text-[#037EF3] text-base">R$ {lastOrder.total.toFixed(2)}</span>
+              </div>
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-gray-500">Contato</span>
+                <span className="text-sm text-gray-700">{lastOrder.buyerEmail}</span>
+              </div>
+            </div>
+          )}
+
+          <p className="text-xs text-gray-400 mt-5">
+            Guarde esses dados para consultar o status depois.
+          </p>
+
           <button
             onClick={onClose}
-            className="px-6 py-2 rounded-lg text-sm font-medium bg-[#037EF3] text-white hover:bg-[#0256B0] transition-colors"
+            className="mt-5 w-full py-2.5 rounded-lg text-sm font-semibold bg-[#037EF3] text-white hover:bg-[#0256B0] transition-colors"
           >
             Fechar
           </button>

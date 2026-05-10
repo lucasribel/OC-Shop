@@ -8,8 +8,8 @@
  * Amanhã: trocar repositórios por implementações Firebase/Sheets.
  */
 
-import { productRepo, orderRepo, conferenceRepo, userRepo } from '../repositories'
-import type { Product, Order, Conference, OrderItem, User } from '../types'
+import { productRepo, orderRepo, conferenceRepo, userRepo, sectionRepo } from '../repositories'
+import type { Product, Order, Conference, OrderItem, User, SystemConfig } from '../types'
 
 // ---------------------------------------------------------------------------
 // Tipos auxiliares para compatibilidade com páginas existentes
@@ -207,11 +207,22 @@ export const api = {
     listByCollaborator: (userId: string) => conferenceRepo.findByCollaborator(userId),
     create: (data: Omit<Conference, 'id'>) => conferenceRepo.create(data),
     update: (id: string, data: Partial<Conference>) => conferenceRepo.update(id, data),
+    addCollaborator: (conferenceId: string, userId: string) => conferenceRepo.addCollaborator(conferenceId, userId),
+    removeCollaborator: (conferenceId: string, userId: string) => conferenceRepo.removeCollaborator(conferenceId, userId),
+    transferOwner: (conferenceId: string, newOwnerId: string) => conferenceRepo.transferOwner(conferenceId, newOwnerId),
   },
   products: {
     listByConference: (conferenceId: string) =>
       productRepo.findByConference(conferenceId),
     getById: (id: string) => productRepo.findById(id),
+  },
+  sections: {
+    listByConference: (conferenceId: string) => sectionRepo.findByConference(conferenceId),
+    create: (data: Parameters<typeof sectionRepo.create>[0]) => sectionRepo.create(data),
+    update: (id: string, data: Parameters<typeof sectionRepo.update>[1]) => sectionRepo.update(id, data),
+    delete: (id: string) => sectionRepo.delete(id),
+    reorder: (conferenceId: string, orderedIds: string[]) => sectionRepo.reorder(conferenceId, orderedIds),
+    reorderProducts: (sectionId: string, orderedProductIds: string[]) => sectionRepo.reorderProducts(sectionId, orderedProductIds),
   },
   orders: {
     checkDuplicate: (email: string, conferenceId: string) =>
@@ -257,6 +268,9 @@ export const api = {
 
       return order
     },
+    update: (id: string, data: Partial<Order>) => orderRepo.update(id, data),
+    updateStatus: (id: string, status: Order['status']) => orderRepo.updateStatus(id, status),
+    delete: (id: string) => orderRepo.delete(id),
   },
   users: {
     getConfig: () => userRepo.getConfig(),
@@ -265,5 +279,6 @@ export const api = {
     listAll: () => userRepo.findAll(),
     create: (data: Omit<User, 'id'>) => userRepo.create(data),
     update: (id: string, data: Partial<User>) => userRepo.update(id, data),
+    updateConfig: (data: Partial<SystemConfig>) => userRepo.updateConfig(data),
   },
 }

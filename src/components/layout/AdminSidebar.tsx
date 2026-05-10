@@ -82,10 +82,24 @@ export function AdminSidebar({ open, onClose }: AdminSidebarProps) {
               onClick={onClose}
             />
             <NavLink
+              to={`/admin/${slug}/secoes`}
+              icon="🗂️"
+              label="Seções do Shop"
+              active={isActive(`/admin/${slug}/secoes`)}
+              onClick={onClose}
+            />
+            <NavLink
               to={`/admin/${slug}/pedidos`}
               icon="🧾"
               label="Pedidos"
               active={isActive(`/admin/${slug}/pedidos`)}
+              onClick={onClose}
+            />
+            <NavLink
+              to={`/admin/${slug}/equipe`}
+              icon="👥"
+              label="Equipe"
+              active={isActive(`/admin/${slug}/equipe`)}
               onClick={onClose}
             />
             {isAdmin() && (

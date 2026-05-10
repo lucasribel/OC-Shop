@@ -1,0 +1,11 @@
+{
+  "config": {
+    "mode": "closed",
+    "allowedAdminDomain": null,
+    "setupCompleted": false
+  },
+  "users": [],
+  "conferences": [],
+  "products": [],
+  "orders": []
+}

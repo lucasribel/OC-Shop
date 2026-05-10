@@ -6,7 +6,7 @@ import { useAuthStore } from '@/store/useAuthStore'
 import { ProductCard } from '@/components/shop/ProductCard'
 import { CheckoutDrawer } from '@/components/shop/CheckoutDrawer'
 import { formatDate, formatDateTime } from '@/utils/format'
-import type { Conference, Product, Order } from '@/types'
+import type { Conference, Product, Order, ProductSection } from '@/types'
 
 function NotFound() {
   const navigate = useNavigate()
@@ -216,6 +216,7 @@ export default function ConferenceShopPage() {
 
   const [conference, setConference] = useState<Conference | null>(null)
   const [products, setProducts] = useState<Product[]>([])
+const [sections, setSections] = useState<ProductSection[]>([])
   const [loading, setLoading] = useState(true)
   const [notFound, setNotFound] = useState(false)
   const [checkoutOpen, setCheckoutOpen] = useState(false)
@@ -234,8 +235,12 @@ export default function ConferenceShopPage() {
       setConference(conf)
 
       if (conf.status === 'open') {
-        const prods = await api.products.listByConference(conf.id)
+        const [prods, secs] = await Promise.all([
+          api.products.listByConference(conf.id),
+          api.sections.listByConference(conf.id),
+        ])
         setProducts(prods)
+        setSections(secs)
       }
       setLoading(false)
     }
@@ -309,6 +314,10 @@ export default function ConferenceShopPage() {
     )
   }
 
+const hasSections = sections.length > 0
+const allSectionsEmpty = sections.every((s) => s.productIds.length === 0)
+const useSections = hasSections && !allSectionsEmpty
+
   const cartCount = itemCount()
 
   return (
@@ -379,11 +388,70 @@ export default function ConferenceShopPage() {
         {/* Login banner */}
         {!user && <LoginBanner />}
 
-        {/* Products grid */}
+        {/* Banner */}
+        {conference.pageConfig?.bannerUrl && (
+          <div className="relative w-full aspect-[3/1] rounded-xl overflow-hidden mb-6">
+            <img src={conference.pageConfig.bannerUrl} className="w-full h-full object-cover" />
+            {conference.pageConfig?.bannerTitle && (
+              <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent flex items-end p-6">
+                <h2 className="font-display font-bold text-2xl text-white">{conference.pageConfig.bannerTitle}</h2>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Description */}
+        {conference.pageConfig?.description && (
+          <div className="bg-[#E8F4FE] rounded-xl p-4 mb-6 text-sm text-gray-700">
+            {conference.pageConfig.description}
+          </div>
+        )}
+
+        {/* Products */}
         {products.length === 0 ? (
           <div className="text-center py-20">
             <p className="text-gray-400">Nenhum produto disponível neste shop.</p>
           </div>
+        ) : useSections ? (
+          <>
+            {sections.map((section) => {
+              const sectionProducts = section.productIds
+                .map((pid) => products.find((p) => p.id === pid))
+                .filter((p): p is Product => p != null)
+              if (sectionProducts.length === 0) return null
+              return (
+                <section key={section.id} className="mb-10">
+                  <div className="mb-4">
+                    <h2 className="font-display font-semibold text-xl text-gray-900">{section.name}</h2>
+                    {section.description && <p className="text-sm text-gray-500 mt-1">{section.description}</p>}
+                  </div>
+                  <div className="grid gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                    {sectionProducts.map((product) => (
+                      <ProductCard key={product.id} product={product} />
+                    ))}
+                  </div>
+                </section>
+              )
+            })}
+            {/* Unassigned products */}
+            {(() => {
+              const assignedIds = new Set(sections.flatMap((s) => s.productIds))
+              const unassigned = products.filter((p) => !assignedIds.has(p.id))
+              if (unassigned.length === 0) return null
+              return (
+                <section className="mb-10">
+                  <div className="mb-4">
+                    <h2 className="font-display font-semibold text-xl text-gray-900">Outros</h2>
+                  </div>
+                  <div className="grid gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                    {unassigned.map((product) => (
+                      <ProductCard key={product.id} product={product} />
+                    ))}
+                  </div>
+                </section>
+              )
+            })()}
+          </>
         ) : (
           <div className="grid gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {products.map((product) => (

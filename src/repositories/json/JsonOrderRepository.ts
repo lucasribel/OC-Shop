@@ -30,26 +30,12 @@ export class JsonOrderRepository implements IOrderRepository {
     return delay(store().filter((o) => o.userId === userId))
   }
 
-  async findActiveByBuyerAndConference(
-    email: string,
-    conferenceId: string
-  ): Promise<Order | null> {
-    return delay(
-      store().find(
-        (o) =>
-          o.buyerEmail === email &&
-          o.conferenceId === conferenceId &&
-          o.status !== 'cancelled'
-      ) ?? null
-    )
+  async findActiveByBuyerAndConference(email: string, conferenceId: string): Promise<Order | null> {
+    return delay(store().find((o) => o.buyerEmail === email && o.conferenceId === conferenceId && o.status !== 'cancelled') ?? null)
   }
 
   async create(data: Omit<Order, 'id' | 'createdAt'>): Promise<Order> {
-    const order: Order = {
-      ...data,
-      id: generateId(),
-      createdAt: new Date().toISOString(),
-    }
+    const order: Order = { ...data, id: generateId(), createdAt: new Date().toISOString() }
     store().push(order)
     return delay(order)
   }
@@ -60,5 +46,20 @@ export class JsonOrderRepository implements IOrderRepository {
     if (idx === -1) throw new Error(`Order ${id} not found`)
     list[idx] = { ...list[idx], status }
     return delay(list[idx])
+  }
+
+  async update(id: string, data: Partial<Order>): Promise<Order> {
+    const list = store()
+    const idx = list.findIndex((o) => o.id === id)
+    if (idx === -1) throw new Error(`Order ${id} not found`)
+    list[idx] = { ...list[idx], ...data }
+    return delay({ ...list[idx] })
+  }
+
+  async delete(id: string): Promise<void> {
+    const list = store()
+    const idx = list.findIndex((o) => o.id === id)
+    if (idx !== -1) list.splice(idx, 1)
+    return delay(undefined)
   }
 }

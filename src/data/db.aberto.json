@@ -1,9 +1,5 @@
 {
-  "config": {
-    "mode": "closed",
-    "allowedAdminDomain": "aiesec.net",
-    "setupCompleted": true
-  },
+  "config": { "mode": "open", "allowedAdminDomain": null, "setupCompleted": true },
   "users": [
     { "id": "u1", "name": "Super Admin", "email": "super@aiesec.net", "role": "super_admin", "googleId": "google_super1", "conferenceIds": [] },
     { "id": "u2", "name": "Admin AIESEC SP", "email": "admin@aiesec.net", "role": "admin", "googleId": "google_admin1", "conferenceIds": ["conf1", "conf2"] },
@@ -11,34 +7,8 @@
     { "id": "u4", "name": "Maria Silva", "email": "maria.silva@gmail.com", "role": "user", "conferenceIds": [] }
   ],
   "conferences": [
-    {
-      "id": "conf1",
-      "name": "Conferência 2026.1",
-      "slug": "conferencia_2026.1",
-      "status": "open",
-      "startDate": "2026-06-01",
-      "endDate": "2026-06-05",
-      "orderDeadline": "2026-05-25",
-      "ownerId": "u2",
-      "pageConfig": {
-        "bannerUrl": "https://images.unsplash.com/photo-1540575467063-178a50c2df87?w=1200&q=80",
-        "bannerTitle": "Conferência 2026.1",
-        "description": "A maior conferência nacional da AIESEC Brasil. Garanta seu kit e vista a camisa!"
-      },
-      "collaboratorIds": ["u3"]
-    },
-    {
-      "id": "conf2",
-      "name": "Summit Nacional 2025",
-      "slug": "summit_nacional_2025",
-      "status": "closed",
-      "startDate": "2025-11-10",
-      "endDate": "2025-11-14",
-      "orderDeadline": "2025-11-01",
-      "ownerId": "u2",
-      "pageConfig": { "bannerUrl": "", "bannerTitle": "", "description": "" },
-      "collaboratorIds": []
-    }
+    { "id": "conf1", "name": "Conferência 2026.1", "slug": "conferencia_2026.1", "status": "open", "startDate": "2026-06-01", "endDate": "2026-06-05", "orderDeadline": "2026-05-25", "ownerId": "u2", "pageConfig": { "bannerUrl": "https://images.unsplash.com/photo-1540575467063-178a50c2df87?w=1200&q=80", "bannerTitle": "Conferência 2026.1", "description": "A maior conferência nacional da AIESEC Brasil. Garanta seu kit e vista a camisa!" }, "collaboratorIds": ["u3"] },
+    { "id": "conf2", "name": "Summit Nacional 2025", "slug": "summit_nacional_2025", "status": "closed", "startDate": "2025-11-10", "endDate": "2025-11-14", "orderDeadline": "2025-11-01", "ownerId": "u2", "pageConfig": { "bannerUrl": "", "bannerTitle": "", "description": "" }, "collaboratorIds": [] }
   ],
   "sections": [
     { "id": "sec1", "conferenceId": "conf1", "name": "Kits e Materiais", "description": "Tudo que você precisa para a conferência", "order": 0, "productIds": ["prod1"] },

@@ -43,6 +43,11 @@ export interface Conference {
   orderDeadline: string
   ownerId: string
   collaboratorIds: string[]
+  pageConfig?: {
+    bannerUrl?: string
+    bannerTitle?: string
+    description?: string
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -94,4 +99,21 @@ export interface Order {
   total: number
   status: OrderStatus
   createdAt: string
+}
+
+export interface ProductSection {
+  id: string
+  conferenceId: string
+  name: string
+  description?: string
+  order: number
+  productIds: string[]
+}
+
+export interface ConferencePage {
+  conferenceId: string
+  bannerUrl?: string
+  bannerTitle?: string
+  description?: string
+  sections: ProductSection[]
 }

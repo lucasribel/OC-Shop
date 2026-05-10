@@ -5,9 +5,12 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:setup": "vite --mode development.setup",
+    "dev:fechado": "vite --mode development.fechado",
+    "dev:aberto": "vite --mode development.aberto",
     "build": "tsc -b && vite build",
-    "lint": "eslint .",
-    "preview": "vite preview"
+    "start": "vite preview",
+    "lint": "eslint ."
   },
   "dependencies": {
     "axios": "^1.16.0",

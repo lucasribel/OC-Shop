@@ -51,4 +51,42 @@ export class JsonConferenceRepository implements IConferenceRepository {
     list[idx] = { ...list[idx], ...data }
     return delay(list[idx])
   }
+
+  async addCollaborator(conferenceId: string, userId: string): Promise<Conference> {
+    const conf = store().find((c) => c.id === conferenceId)
+    if (!conf) throw new Error(`Conference ${conferenceId} not found`)
+    if (!conf.collaboratorIds.includes(userId)) {
+      conf.collaboratorIds.push(userId)
+      const users = getDB().users
+      const user = users.find((u) => u.id === userId)
+      if (user && !user.conferenceIds?.includes(conferenceId)) {
+        user.conferenceIds = [...(user.conferenceIds || []), conferenceId]
+      }
+    }
+    return delay({ ...conf })
+  }
+
+  async removeCollaborator(conferenceId: string, userId: string): Promise<Conference> {
+    const conf = store().find((c) => c.id === conferenceId)
+    if (!conf) throw new Error(`Conference ${conferenceId} not found`)
+    conf.collaboratorIds = conf.collaboratorIds.filter((id) => id !== userId)
+    const users = getDB().users
+    const user = users.find((u) => u.id === userId)
+    if (user?.conferenceIds) {
+      user.conferenceIds = user.conferenceIds.filter((id) => id !== conferenceId)
+    }
+    return delay({ ...conf })
+  }
+
+  async transferOwner(conferenceId: string, newOwnerId: string): Promise<Conference> {
+    const conf = store().find((c) => c.id === conferenceId)
+    if (!conf) throw new Error(`Conference ${conferenceId} not found`)
+    const oldOwnerId = conf.ownerId
+    conf.ownerId = newOwnerId
+    if (!conf.collaboratorIds.includes(oldOwnerId)) {
+      conf.collaboratorIds.push(oldOwnerId)
+    }
+    conf.collaboratorIds = conf.collaboratorIds.filter((id) => id !== newOwnerId)
+    return delay({ ...conf })
+  }
 }

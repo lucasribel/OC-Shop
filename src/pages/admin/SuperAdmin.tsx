@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { api } from '@/services/api'
 import { useAuthStore } from '@/store/useAuthStore'
 import { RoleBadge } from '@/components/ui'
+import { AdminSystemLayout } from '@/components/layout/AdminSystemLayout'
 import type { User, SystemConfig } from '@/types'
 
 function ToggleSwitch({ value, onChange, label }: { value: boolean; onChange: (v: boolean) => void; label: [string, string] }) {
@@ -68,7 +69,8 @@ export default function SuperAdmin() {
   if (!user) return null
 
   return (
-    <div>
+    <AdminSystemLayout>
+      <div>
       <div className="mb-6">
         <h1 className="font-display text-2xl font-bold text-[#1A1A2E]">Super Admin</h1>
         <p className="text-sm text-gray-500 mt-1">Gerencie o sistema e os administradores</p>
@@ -170,5 +172,6 @@ export default function SuperAdmin() {
         </div>
       )}
     </div>
+    </AdminSystemLayout>
   )
 }

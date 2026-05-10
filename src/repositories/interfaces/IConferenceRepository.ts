@@ -8,4 +8,7 @@ export interface IConferenceRepository {
   findByCollaborator(userId: string): Promise<Conference[]>
   create(conference: Omit<Conference, 'id'>): Promise<Conference>
   update(id: string, data: Partial<Conference>): Promise<Conference>
+  addCollaborator(conferenceId: string, userId: string): Promise<Conference>
+  removeCollaborator(conferenceId: string, userId: string): Promise<Conference>
+  transferOwner(conferenceId: string, newOwnerId: string): Promise<Conference>
 }

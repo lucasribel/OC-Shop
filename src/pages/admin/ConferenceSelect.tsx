@@ -82,6 +82,8 @@ export default function ConferenceSelect() {
   const [users, setUsers] = useState<Record<string, string>>({})
   const [loading, setLoading] = useState(true)
   const [modalOpen, setModalOpen] = useState(false)
+  const [transferTarget, setTransferTarget] = useState<string | null>(null)
+  const [transferEmail, setTransferEmail] = useState('')
 
   useEffect(() => {
     async function load() {
@@ -96,6 +98,21 @@ export default function ConferenceSelect() {
   }, [user, isSuperAdmin, isAdmin, isCollaborator])
 
   const handleLogout = async () => { await logout(); navigate('/entrar') }
+
+  const handleTransfer = async (confId: string) => {
+    if (!transferEmail.trim()) return
+    const targetUser = await api.users.getByEmail(transferEmail.trim())
+    if (!targetUser) { alert('Usuário não encontrado'); return }
+    await api.conferences.transferOwner(confId, targetUser.id)
+    setTransferTarget(null)
+    setTransferEmail('')
+    // Reload
+    let confs: Conference[] = []
+    if (isSuperAdmin()) confs = await api.conferences.listAll()
+    else if (isAdmin()) confs = await api.conferences.listByOwner(user!.id)
+    else if (isCollaborator()) confs = await api.conferences.listByCollaborator(user!.id)
+    setConferences(confs)
+  }
 
   if (loading) {
     return <div className="min-h-screen bg-[#F4F6F9] flex items-center justify-center"><div className="animate-spin h-8 w-8 border-4 border-[#037EF3] border-t-transparent rounded-full" /></div>
@@ -151,23 +168,47 @@ export default function ConferenceSelect() {
             </button>
           )}
 
-          {conferences.map((conf) => (
-            <div key={conf.id} className="bg-white rounded-xl shadow-card overflow-hidden hover:shadow-elevated transition-shadow duration-200">
-              <div className="h-1.5 bg-[#037EF3]" />
+          {conferences.map((conf) => {
+            const isOwner = conf.ownerId === user?.id
+            const isCollab = conf.collaboratorIds.includes(user?.id ?? '')
+            const borderColor = isOwner ? 'border-l-4 border-[#00A94F]' : (isCollab && !isOwner ? 'border-l-4 border-[#037EF3]' : '')
+            return (
+            <div key={conf.id} className={`bg-white rounded-xl shadow-card overflow-hidden hover:shadow-elevated transition-shadow duration-200 ${borderColor}`}>
               <div className="p-5 space-y-3">
-                <StatusBadge status={conf.status} />
+                <div className="flex items-start justify-between">
+                  <StatusBadge status={conf.status} />
+                  {(isOwner || user?.role === 'super_admin') && (
+                    <div className="relative">
+                      <button onClick={() => setTransferTarget(transferTarget === conf.id ? null : conf.id)} className="p-1 text-gray-400 hover:text-gray-600 transition-colors">
+                        <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="5" r="2" /><circle cx="12" cy="12" r="2" /><circle cx="12" cy="19" r="2" /></svg>
+                      </button>
+                      {transferTarget === conf.id && (
+                        <div className="absolute right-0 top-8 w-64 bg-white rounded-xl shadow-lg border border-gray-200 p-3 z-10" onClick={(e) => e.stopPropagation()}>
+                          <p className="text-xs font-semibold text-gray-700 mb-2">Transferir administração</p>
+                          <input type="email" value={transferEmail} onChange={(e) => setTransferEmail(e.target.value)} placeholder="E-mail do novo admin" className="w-full rounded-lg border border-gray-200 px-3 py-1.5 text-xs mb-2 focus:outline-none focus:ring-2 focus:ring-[#037EF3]/20" />
+                          <div className="flex gap-2">
+                            <button onClick={() => { setTransferTarget(null); setTransferEmail('') }} className="flex-1 py-1.5 rounded-lg text-xs font-medium border border-gray-200 text-gray-600 hover:bg-gray-50">Cancelar</button>
+                            <button onClick={() => handleTransfer(conf.id)} className="flex-1 py-1.5 rounded-lg text-xs font-medium bg-[#037EF3] text-white hover:bg-[#0256B0]">Transferir</button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
                 <h3 className="font-display text-lg font-semibold text-[#1A1A2E]">{conf.name}</h3>
                 <p className="text-xs text-gray-400 font-mono">slug: {conf.slug}</p>
-                <div className="flex items-center gap-4 text-sm text-gray-500">
-                  <span>👤 Dono: {users[conf.ownerId] || conf.ownerId}</span>
-                  <span>📅 {formatDate(conf.startDate)}</span>
+                <div className="text-sm text-gray-500 space-y-1">
+                  <p>👤 Dono: {users[conf.ownerId] || conf.ownerId}</p>
+                  {isOwner && <p className="text-[#00A94F] font-medium text-xs">Você é o administrador desta conferência</p>}
+                  {!isOwner && isCollab && user && <p className="text-[#037EF3] font-medium text-xs">Convidado por: {users[conf.ownerId] || conf.ownerId}</p>}
+                  <p>📅 {formatDate(conf.startDate)} → {formatDate(conf.endDate)}</p>
                 </div>
                 <button onClick={() => navigate(`/admin/${conf.slug}/dashboard`)} className="w-full py-2.5 rounded-lg text-sm font-semibold bg-[#037EF3] text-white hover:bg-[#0256B0] transition-colors">
                   Acessar Dashboard →
                 </button>
               </div>
             </div>
-          ))}
+          )})}
         </div>
 
         {conferences.length === 0 && !isAdmin() && (

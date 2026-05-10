@@ -12,6 +12,8 @@ import ConferenceShopPage from '@/pages/ConferenceShopPage'
 import AdminLogin from '@/pages/admin/AdminLogin'
 import ConferenceSelect from '@/pages/admin/ConferenceSelect'
 import Dashboard from '@/pages/admin/Dashboard'
+import AdminEquipe from '@/pages/admin/Equipe'
+import AdminSecoes from '@/pages/admin/Secoes'
 import ConferenceConfig from '@/pages/admin/ConferenceConfig'
 import Setup from '@/pages/Setup'
 
@@ -79,7 +81,9 @@ export const router = createBrowserRouter([
           { index: true, element: <Navigate to="dashboard" replace /> },
           { path: 'dashboard', element: <Dashboard /> },
           { path: 'produtos', element: <AdminProdutos /> },
+          { path: 'secoes', element: <AdminSecoes /> },
           { path: 'pedidos', element: <AdminPedidos /> },
+          { path: 'equipe', element: <AdminEquipe /> },
           { path: 'configuracoes', element: <ConferenceConfig /> },
         ],
       },
