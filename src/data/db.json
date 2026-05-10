@@ -1,0 +1,138 @@
+{
+  "config": {
+    "mode": "closed",
+    "allowedAdminDomain": "aiesec.net",
+    "setupCompleted": true
+  },
+  "users": [
+    {
+      "id": "u1",
+      "name": "Super Admin",
+      "email": "super@aiesec.net",
+      "role": "super_admin",
+      "googleId": "google_super1",
+      "conferenceIds": []
+    },
+    {
+      "id": "u2",
+      "name": "Admin AIESEC SP",
+      "email": "admin@aiesec.net",
+      "role": "admin",
+      "googleId": "google_admin1",
+      "conferenceIds": ["conf1", "conf2"]
+    },
+    {
+      "id": "u3",
+      "name": "Colaboradora Ana",
+      "email": "ana@aiesec.net",
+      "role": "collaborator",
+      "googleId": "google_collab1",
+      "conferenceIds": ["conf1"]
+    },
+    {
+      "id": "u4",
+      "name": "Maria Silva",
+      "email": "maria.silva@gmail.com",
+      "role": "user",
+      "conferenceIds": []
+    }
+  ],
+  "conferences": [
+    {
+      "id": "conf1",
+      "name": "Conferência 2026.1",
+      "slug": "conferencia_2026.1",
+      "status": "open",
+      "startDate": "2026-06-01",
+      "endDate": "2026-06-05",
+      "orderDeadline": "2026-05-25",
+      "ownerId": "u2",
+      "collaboratorIds": ["u3"]
+    },
+    {
+      "id": "conf2",
+      "name": "Summit Nacional 2025",
+      "slug": "summit_nacional_2025",
+      "status": "closed",
+      "startDate": "2025-11-10",
+      "endDate": "2025-11-14",
+      "orderDeadline": "2025-11-01",
+      "ownerId": "u2",
+      "collaboratorIds": []
+    }
+  ],
+  "products": [
+    {
+      "id": "prod1",
+      "conferenceId": "conf1",
+      "name": "Kit Delegado",
+      "description": "Camiseta, crachá e materiais do evento",
+      "price": 89.90,
+      "imageUrl": "https://images.unsplash.com/photo-1553062407-98eeb64c6a62?w=600&q=80",
+      "stock": 150,
+      "active": true,
+      "variants": [
+        { "label": "Tamanho", "options": ["P", "M", "G", "GG"] }
+      ]
+    },
+    {
+      "id": "prod2",
+      "conferenceId": "conf1",
+      "name": "Hoodie Oficial",
+      "description": "Moletom bordado da conferência",
+      "price": 149.90,
+      "imageUrl": "https://images.unsplash.com/photo-1620799139507-2a76f79a2f4d?w=600&q=80",
+      "stock": 50,
+      "active": true,
+      "variants": [
+        { "label": "Tamanho", "options": ["P", "M", "G", "GG", "XGG"] }
+      ]
+    },
+    {
+      "id": "prod3",
+      "conferenceId": "conf1",
+      "name": "Caneca Personalizada",
+      "description": "Caneca 300ml com logo do evento",
+      "price": 39.90,
+      "imageUrl": "https://images.unsplash.com/photo-1514228742587-6b1558fcca3d?w=600&q=80",
+      "stock": 200,
+      "active": true,
+      "variants": []
+    },
+    {
+      "id": "prod4",
+      "conferenceId": "conf1",
+      "name": "E-book Guia do Delegado",
+      "description": "PDF com informações úteis para o evento",
+      "price": 0,
+      "imageUrl": "https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?w=600&q=80",
+      "stock": 999,
+      "active": true,
+      "variants": []
+    }
+  ],
+  "orders": [
+    {
+      "id": "ord-1",
+      "conferenceId": "conf1",
+      "conferenceSlug": "conferencia_2026.1",
+      "buyerName": "Maria Silva",
+      "buyerEmail": "maria.silva@gmail.com",
+      "buyerPhone": "11999990001",
+      "userId": "u4",
+      "userName": "Maria Silva",
+      "items": [
+        {
+          "productId": "prod1",
+          "productName": "Kit Delegado",
+          "quantity": 1,
+          "unitPrice": 89.90,
+          "selectedVariants": { "Tamanho": "M" }
+        }
+      ],
+      "total": 89.90,
+      "status": "confirmed",
+      "createdAt": "2026-05-01T07:00:00.000Z"
+    }
+  ]
+}

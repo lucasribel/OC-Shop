@@ -10,8 +10,8 @@
 import type { User } from '@/types'
 
 const MOCK_USER: User = {
-  id: 'user-1',
-  email: 'maria.silva@aiesec.net',
+  id: 'u4',
+  email: 'maria.silva@gmail.com',
   name: 'Maria Silva',
   picture: undefined,
   role: 'user',
@@ -19,20 +19,21 @@ const MOCK_USER: User = {
 }
 
 const MOCK_ADM: User = {
-  id: 'adm-1',
+  id: 'u2',
   email: 'admin@aiesec.net',
-  name: 'Admin Local',
+  name: 'Admin AIESEC SP',
   picture: undefined,
-  role: 'adm',
+  role: 'admin',
   aiesec: 'AIESEC São Paulo',
+  conferenceIds: ['conf1', 'conf2'],
 }
 
 const MOCK_SUPER: User = {
-  id: 'super-1',
+  id: 'u1',
   email: 'super@aiesec.net',
   name: 'Super Admin',
   picture: undefined,
-  role: 'super_adm',
+  role: 'super_admin',
   aiesec: 'AIESEC Brasil',
 }
 

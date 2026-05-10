@@ -1,48 +1,97 @@
+// ---------------------------------------------------------------------------
+// System
+// ---------------------------------------------------------------------------
+
+export type SystemMode = 'open' | 'closed'
+
+export type UserRole = 'user' | 'adm' | 'super_adm' | 'collaborator' | 'admin' | 'super_admin'
+
+export interface SystemConfig {
+  mode: SystemMode
+  allowedAdminDomain: string | null
+  setupCompleted: boolean
+}
+
+// ---------------------------------------------------------------------------
+// User
+// ---------------------------------------------------------------------------
+
 export interface User {
   id: string
   email: string
   name: string
   picture?: string
-  role: 'user' | 'adm' | 'super_adm'
+  role: UserRole
   aiesec?: string
+  googleId?: string
+  conferenceIds?: string[]
+}
+
+// ---------------------------------------------------------------------------
+// Conference
+// ---------------------------------------------------------------------------
+
+export interface Conference {
+  id: string
+  name: string
+  slug: string
+  aiesec: string
+  active: boolean
+  status: 'draft' | 'open' | 'closed'
+  startDate: string
+  endDate: string
+  orderDeadline: string
+  ownerId: string
+  collaboratorIds: string[]
+}
+
+// ---------------------------------------------------------------------------
+// Product
+// ---------------------------------------------------------------------------
+
+export interface ProductVariant {
+  label: string
+  options: string[]
 }
 
 export interface Product {
   id: string
+  conferenceId: string
   name: string
   description: string
   price: number
   stock: number
   image?: string
-  conferenceId: string
+  imageUrl: string
   active: boolean
+  variants: ProductVariant[]
 }
+
+// ---------------------------------------------------------------------------
+// Order
+// ---------------------------------------------------------------------------
 
 export interface OrderItem {
   productId: string
   productName: string
   quantity: number
   unitPrice: number
+  selectedVariants: Record<string, string>
 }
 
 export type OrderStatus = 'pending' | 'confirmed' | 'cancelled'
 
 export interface Order {
   id: string
+  conferenceId: string
+  conferenceSlug: string
   userId: string
   userName: string
-  conferenceId: string
+  buyerName: string
+  buyerEmail: string
+  buyerPhone: string
   items: OrderItem[]
   total: number
   status: OrderStatus
   createdAt: string
-}
-
-export interface Conference {
-  id: string
-  name: string
-  aiesec: string
-  active: boolean
-  startDate: string
-  endDate: string
 }

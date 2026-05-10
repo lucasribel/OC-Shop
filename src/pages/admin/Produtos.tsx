@@ -15,6 +15,7 @@ import {
   Badge,
 } from '@/components/ui'
 import { PageWrapper } from '@/components/layout/PageWrapper'
+import { useAdminConference } from '@/components/layout/AdminLayout'
 import type { Product } from '@/types'
 
 type ProductForm = Omit<Product, 'id'>
@@ -30,16 +31,27 @@ const emptyForm: ProductForm = {
 }
 
 export default function AdminProdutos() {
+  const { conference } = useAdminConference()
   const [products, setProducts] = useState<Product[]>([])
   const [loading, setLoading] = useState(true)
   const [editingId, setEditingId] = useState<string | null>(null) // null = new, 'list' = viewing
-  const [form, setForm] = useState<ProductForm>(emptyForm)
+  const [form, setForm] = useState<ProductForm>(() => ({
+    name: '',
+    description: '',
+    price: 0,
+    stock: 0,
+    image: '',
+    imageUrl: '',
+    conferenceId: conference?.id ?? 'conf-1',
+    active: true,
+    variants: [],
+  }))
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const load = async () => {
     setLoading(true)
-    const list = await fetchProducts()
+    const list = await fetchProducts(conference?.id)
     setProducts(list)
     setLoading(false)
   }

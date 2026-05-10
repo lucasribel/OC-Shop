@@ -1,15 +1,25 @@
 import { create } from 'zustand'
 
-interface CartItem {
+export interface CartItem {
   productId: string
   productName: string
   quantity: number
   unitPrice: number
+  imageUrl?: string
+  selectedVariants: Record<string, string>
 }
 
 interface CartState {
   items: CartItem[]
-  setQuantity: (productId: string, productName: string, unitPrice: number, quantity: number) => void
+  setQuantity: (
+    productId: string,
+    productName: string,
+    unitPrice: number,
+    quantity: number,
+    imageUrl?: string,
+    selectedVariants?: Record<string, string>
+  ) => void
+  updateVariant: (productId: string, label: string, value: string) => void
   removeItem: (productId: string) => void
   clear: () => void
   total: () => number
@@ -19,20 +29,42 @@ interface CartState {
 export const useCartStore = create<CartState>((set, get) => ({
   items: [],
 
-  setQuantity: (productId, productName, unitPrice, quantity) => {
+  setQuantity: (productId, productName, unitPrice, quantity, imageUrl, selectedVariants) => {
     set((state) => {
       const existing = state.items.find((i) => i.productId === productId)
       if (existing) {
         return {
           items: state.items.map((i) =>
-            i.productId === productId ? { ...i, quantity } : i
+            i.productId === productId
+              ? { ...i, quantity, selectedVariants: selectedVariants ?? i.selectedVariants }
+              : i
           ),
         }
       }
       return {
-        items: [...state.items, { productId, productName, quantity, unitPrice }],
+        items: [
+          ...state.items,
+          {
+            productId,
+            productName,
+            quantity,
+            unitPrice,
+            imageUrl: imageUrl ?? '',
+            selectedVariants: selectedVariants ?? {},
+          },
+        ],
       }
     })
+  },
+
+  updateVariant: (productId, label, value) => {
+    set((state) => ({
+      items: state.items.map((i) =>
+        i.productId === productId
+          ? { ...i, selectedVariants: { ...i.selectedVariants, [label]: value } }
+          : i
+      ),
+    }))
   },
 
   removeItem: (productId) => {

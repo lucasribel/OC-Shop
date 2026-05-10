@@ -7,16 +7,18 @@ import {
   OrderStatusBadge,
 } from '@/components/ui'
 import { PageWrapper } from '@/components/layout/PageWrapper'
+import { useAdminConference } from '@/components/layout/AdminLayout'
 import type { Order, OrderStatus } from '@/types'
 
 export default function AdminPedidos() {
+  const { conference } = useAdminConference()
   const [orders, setOrders] = useState<Order[]>([])
   const [loading, setLoading] = useState(true)
   const [updatingId, setUpdatingId] = useState<string | null>(null)
 
   const load = async () => {
     setLoading(true)
-    const list = await fetchOrders()
+    const list = await fetchOrders(conference?.id)
     setOrders(list)
     setLoading(false)
   }

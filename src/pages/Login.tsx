@@ -17,7 +17,7 @@ export default function Login() {
       <div className="w-full max-w-sm">
         <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-8 text-center">
           {/* Logo */}
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-xl bg-primary-500 mb-6">
+          <div className="inline-flex items-center justify-center w-16 h-16 rounded-xl bg-[#037EF3] mb-6">
             <span className="text-2xl font-bold text-white">A</span>
           </div>
 
@@ -62,7 +62,7 @@ export default function Login() {
           </Button>
 
           <p className="mt-6 text-xs text-gray-400">
-            Apenas contas @aiesec.net
+            Para salvar o histórico dos seus pedidos
           </p>
         </div>
       </div>

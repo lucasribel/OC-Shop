@@ -1,101 +1,29 @@
-import type { Product, Order, Conference } from '@/types'
-
 /**
  * API abstraction layer.
  *
- * Hoje: dados mockados (estáticos).
- * Amanhã: substituir implementações por chamadas Axios ao backend.
+ * Camada que expõe funções para os componentes e stores.
+ * Internamente delega para os repositórios — nunca contém dados hardcoded.
  *
- * NUNCA chamar HTTP diretamente nos componentes.
- * NUNCA importar axios fora deste arquivo.
+ * Hoje: repositórios JSON (dados mockados).
+ * Amanhã: trocar repositórios por implementações Firebase/Sheets.
  */
 
-// ---------------------------------------------------------------------------
-// Mock data
-// ---------------------------------------------------------------------------
-
-const mockConference: Conference = {
-  id: 'conf-1',
-  name: 'CONF Nacional 2026',
-  aiesec: 'AIESEC Brasil',
-  active: true,
-  startDate: '2026-01-01',
-  endDate: '2026-12-31',
-}
-
-const mockProducts: Product[] = [
-  {
-    id: 'prod-1',
-    name: 'Kit Delegado',
-    description: 'Camiseta, crachá e materiais do evento',
-    price: 89.90,
-    stock: 150,
-    conferenceId: 'conf-1',
-    active: true,
-  },
-  {
-    id: 'prod-2',
-    name: 'Hoodie Oficial',
-    description: 'Moletom bordado da conferência',
-    price: 149.90,
-    stock: 50,
-    conferenceId: 'conf-1',
-    active: true,
-  },
-  {
-    id: 'prod-3',
-    name: 'Caneca Personalizada',
-    description: 'Caneca 300ml com logo do evento',
-    price: 39.90,
-    stock: 200,
-    conferenceId: 'conf-1',
-    active: true,
-  },
-  {
-    id: 'prod-4',
-    name: 'E-book Guia do Delegado',
-    description: 'PDF com informações úteis para o evento',
-    price: 0,
-    stock: 999,
-    conferenceId: 'conf-1',
-    active: true,
-  },
-]
-
-const mockOrders: Order[] = [
-  {
-    id: 'ord-1',
-    userId: 'user-1',
-    userName: 'Maria Silva',
-    conferenceId: 'conf-1',
-    items: [
-      { productId: 'prod-1', productName: 'Kit Delegado', quantity: 1, unitPrice: 89.90 },
-    ],
-    total: 89.90,
-    status: 'confirmed',
-    createdAt: '2026-05-01T10:00:00Z',
-  },
-  {
-    id: 'ord-2',
-    userId: 'user-2',
-    userName: 'João Santos',
-    conferenceId: 'conf-1',
-    items: [
-      { productId: 'prod-2', productName: 'Hoodie Oficial', quantity: 2, unitPrice: 149.90 },
-      { productId: 'prod-3', productName: 'Caneca Personalizada', quantity: 1, unitPrice: 39.90 },
-    ],
-    total: 339.70,
-    status: 'pending',
-    createdAt: '2026-05-03T14:30:00Z',
-  },
-]
+import { productRepo, orderRepo, conferenceRepo, userRepo } from '../repositories'
+import type { Product, Order, Conference, OrderItem, User } from '../types'
 
 // ---------------------------------------------------------------------------
-// Simulated delay
+// Tipos auxiliares para compatibilidade com páginas existentes
 // ---------------------------------------------------------------------------
 
-function delay(ms = 400): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms))
+// Items que as páginas passam — sem selectedVariants
+type PageOrderItem = Omit<OrderItem, 'selectedVariants'>
+
+interface CreateOrderInput {
+  userId: string
+  userName: string
+  conferenceId: string
+  items: PageOrderItem[]
+  total: number
 }
 
 // ---------------------------------------------------------------------------
@@ -103,39 +31,36 @@ function delay(ms = 400): Promise<void> {
 // ---------------------------------------------------------------------------
 
 export async function fetchProducts(conferenceId?: string): Promise<Product[]> {
-  await delay()
-  let list = mockProducts.filter((p) => p.active)
   if (conferenceId) {
-    list = list.filter((p) => p.conferenceId === conferenceId)
+    return productRepo.findByConference(conferenceId)
   }
-  return list
+  // Se não informou conferência, usa a primeira ativa
+  const all = await conferenceRepo.findAll()
+  const active = all.find((c) => c.status === 'open')
+  if (!active) return []
+  return productRepo.findByConference(active.id)
 }
 
 export async function createProduct(
   data: Omit<Product, 'id'>
 ): Promise<Product> {
-  await delay()
-  const product: Product = { ...data, id: `prod-${Date.now()}` }
-  mockProducts.push(product)
-  return product
+  const defaults = {
+    image: data.image ?? '',
+    imageUrl: data.imageUrl ?? data.image ?? '',
+    variants: data.variants ?? [],
+  }
+  return productRepo.create({ ...defaults, ...data })
 }
 
 export async function updateProduct(
   id: string,
   data: Partial<Product>
 ): Promise<Product> {
-  await delay()
-  const idx = mockProducts.findIndex((p) => p.id === id)
-  if (idx === -1) throw new Error('Produto não encontrado')
-  mockProducts[idx] = { ...mockProducts[idx], ...data }
-  return mockProducts[idx]
+  return productRepo.update(id, data)
 }
 
 export async function deleteProduct(id: string): Promise<void> {
-  await delay()
-  const idx = mockProducts.findIndex((p) => p.id === id)
-  if (idx === -1) throw new Error('Produto não encontrado')
-  mockProducts.splice(idx, 1)
+  return productRepo.delete(id)
 }
 
 // ---------------------------------------------------------------------------
@@ -143,27 +68,40 @@ export async function deleteProduct(id: string): Promise<void> {
 // ---------------------------------------------------------------------------
 
 export async function fetchOrders(conferenceId?: string): Promise<Order[]> {
-  await delay()
-  let list = [...mockOrders]
-  if (conferenceId) {
-    list = list.filter((o) => o.conferenceId === conferenceId)
-  }
-  return list
+  if (conferenceId) return orderRepo.findByConference(conferenceId)
+  const all = await conferenceRepo.findAll()
+  const active = all.find((c) => c.status === 'open')
+  if (!active) return []
+  return orderRepo.findByConference(active.id)
 }
 
 export async function fetchMyOrders(userId: string): Promise<Order[]> {
-  await delay()
-  return mockOrders.filter((o) => o.userId === userId)
+  return orderRepo.findByUserId(userId)
 }
 
-export async function createOrder(
-  data: Omit<Order, 'id' | 'createdAt' | 'status'>
-): Promise<Order> {
-  await delay()
+export async function createOrder(data: CreateOrderInput): Promise<Order> {
+  // Busca conferência para obter slug
+  const conf = await conferenceRepo.findById(data.conferenceId)
+  if (!conf) throw new Error('Conferência não encontrada')
 
-  // Regra: um pedido ativo por conferência
-  const existing = mockOrders.find(
-    (o) => o.userId === data.userId && o.conferenceId === data.conferenceId && o.status !== 'cancelled'
+  // Regra: verificar se conferência está aberta
+  if (conf.status !== 'open') {
+    throw new Error('A loja está fechada para esta conferência')
+  }
+
+  // Busca dados do usuário para enriquecer o pedido
+  let buyerEmail = ''
+  if (data.userId) {
+    const user = await userRepo.findById(data.userId)
+    if (user) {
+      buyerEmail = user.email
+    }
+  }
+
+  // Regra: um pedido ativo por comprador por conferência
+  const existing = await orderRepo.findActiveByBuyerAndConference(
+    buyerEmail,
+    data.conferenceId
   )
   if (existing) {
     throw new Error('Você já possui um pedido ativo para esta conferência')
@@ -171,21 +109,45 @@ export async function createOrder(
 
   // Regra: verificar estoque
   for (const item of data.items) {
-    const product = mockProducts.find((p) => p.id === item.productId)
+    const product = await productRepo.findById(item.productId)
     if (!product) throw new Error(`Produto ${item.productName} não encontrado`)
     if (product.stock < item.quantity) {
       throw new Error(`Estoque insuficiente para ${item.productName}`)
     }
-    product.stock -= item.quantity
   }
 
-  const order: Order = {
-    ...data,
-    id: `ord-${Date.now()}`,
+  // Cria o pedido completo
+  const fullOrder: Omit<Order, 'id' | 'createdAt'> = {
+    conferenceId: data.conferenceId,
+    conferenceSlug: conf.slug,
+    userId: data.userId,
+    userName: data.userName,
+    buyerName: data.userName,
+    buyerEmail,
+    buyerPhone: '',
+    items: data.items.map((item) => ({
+      productId: item.productId,
+      productName: item.productName,
+      quantity: item.quantity,
+      unitPrice: item.unitPrice,
+      selectedVariants: {},
+    })),
+    total: data.total,
     status: 'pending',
-    createdAt: new Date().toISOString(),
   }
-  mockOrders.push(order)
+
+  const order = await orderRepo.create(fullOrder)
+
+  // Descontar estoque
+  for (const item of data.items) {
+    const product = await productRepo.findById(item.productId)
+    if (product) {
+      await productRepo.update(item.productId, {
+        stock: product.stock - item.quantity,
+      })
+    }
+  }
+
   return order
 }
 
@@ -193,11 +155,7 @@ export async function updateOrderStatus(
   id: string,
   status: Order['status']
 ): Promise<Order> {
-  await delay()
-  const idx = mockOrders.findIndex((o) => o.id === id)
-  if (idx === -1) throw new Error('Pedido não encontrado')
-  mockOrders[idx] = { ...mockOrders[idx], status }
-  return mockOrders[idx]
+  return orderRepo.updateStatus(id, status)
 }
 
 // ---------------------------------------------------------------------------
@@ -205,15 +163,107 @@ export async function updateOrderStatus(
 // ---------------------------------------------------------------------------
 
 export async function fetchActiveConference(): Promise<Conference | null> {
-  await delay()
-  return mockConference.active ? mockConference : null
+  const all = await conferenceRepo.findAll()
+  return all.find((c) => c.status === 'open') ?? null
 }
 
 export async function setConferenceActive(
   id: string,
   active: boolean
 ): Promise<Conference> {
-  await delay()
-  mockConference.active = active
-  return mockConference
+  return conferenceRepo.update(id, {
+    status: active ? 'open' : 'closed',
+  })
+}
+
+// ---------------------------------------------------------------------------
+// API object — namespace para páginas novas
+// ---------------------------------------------------------------------------
+
+interface CreateBuyerOrderInput {
+  conferenceId: string
+  conferenceSlug: string
+  buyerName: string
+  buyerEmail: string
+  buyerPhone: string
+  userId: string
+  userName: string
+  items: Array<{
+    productId: string
+    productName: string
+    quantity: number
+    unitPrice: number
+    selectedVariants: Record<string, string>
+  }>
+  total: number
+}
+
+export const api = {
+  conferences: {
+    listAll: () => conferenceRepo.findAll(),
+    getBySlug: (slug: string) => conferenceRepo.findBySlug(slug),
+    getById: (id: string) => conferenceRepo.findById(id),
+    listByOwner: (ownerId: string) => conferenceRepo.findByOwner(ownerId),
+    listByCollaborator: (userId: string) => conferenceRepo.findByCollaborator(userId),
+    create: (data: Omit<Conference, 'id'>) => conferenceRepo.create(data),
+    update: (id: string, data: Partial<Conference>) => conferenceRepo.update(id, data),
+  },
+  products: {
+    listByConference: (conferenceId: string) =>
+      productRepo.findByConference(conferenceId),
+    getById: (id: string) => productRepo.findById(id),
+  },
+  orders: {
+    checkDuplicate: (email: string, conferenceId: string) =>
+      orderRepo.findActiveByBuyerAndConference(email, conferenceId),
+    listByBuyer: (email: string, phone?: string) =>
+      orderRepo.findByBuyer(email, phone),
+    listByUser: (userId: string) =>
+      orderRepo.findByUserId(userId),
+    listByConference: (conferenceId: string) =>
+      orderRepo.findByConference(conferenceId),
+    create: async (data: CreateBuyerOrderInput): Promise<Order> => {
+      // Verificar estoque
+      for (const item of data.items) {
+        const product = await productRepo.findById(item.productId)
+        if (!product) throw new Error(`Produto ${item.productName} não encontrado`)
+        if (product.stock < item.quantity) {
+          throw new Error(`Estoque insuficiente para ${item.productName}`)
+        }
+      }
+
+      const order = await orderRepo.create({
+        conferenceId: data.conferenceId,
+        conferenceSlug: data.conferenceSlug,
+        userId: data.userId,
+        userName: data.userName,
+        buyerName: data.buyerName,
+        buyerEmail: data.buyerEmail,
+        buyerPhone: data.buyerPhone,
+        items: data.items,
+        total: data.total,
+        status: 'pending',
+      })
+
+      // Descontar estoque
+      for (const item of data.items) {
+        const product = await productRepo.findById(item.productId)
+        if (product) {
+          await productRepo.update(item.productId, {
+            stock: product.stock - item.quantity,
+          })
+        }
+      }
+
+      return order
+    },
+  },
+  users: {
+    getConfig: () => userRepo.getConfig(),
+    getById: (id: string) => userRepo.findById(id),
+    getByEmail: (email: string) => userRepo.findByEmail(email),
+    listAll: () => userRepo.findAll(),
+    create: (data: Omit<User, 'id'>) => userRepo.create(data),
+    update: (id: string, data: Partial<User>) => userRepo.update(id, data),
+  },
 }
