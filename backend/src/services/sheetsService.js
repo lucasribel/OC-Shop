@@ -1,6 +1,12 @@
 const { randomUUID } = require('crypto')
 const { sheets, SPREADSHEET_ID } = require('../config/googleSheets')
 
+const SHEETS_ENABLED = !!(
+  SPREADSHEET_ID &&
+  process.env.GOOGLE_SHEETS_CLIENT_EMAIL &&
+  process.env.GOOGLE_SHEETS_PRIVATE_KEY
+)
+
 const SHEETS = {
   conferences: 'Conferences',
   products: 'Products',
@@ -22,6 +28,7 @@ const HEADERS = {
 // ---------------------------------------------------------------------------
 
 async function readRows(sheetName) {
+  if (!SHEETS_ENABLED) return []
   const res = await sheets.spreadsheets.values.get({
     spreadsheetId: SPREADSHEET_ID,
     range: `${sheetName}!A:Z`,
@@ -61,6 +68,7 @@ function rowToArray(headers, data) {
 }
 
 async function appendRow(sheetName, headers, data) {
+  if (!SHEETS_ENABLED) return
   await sheets.spreadsheets.values.append({
     spreadsheetId: SPREADSHEET_ID,
     range: `${sheetName}!A1`,
@@ -71,6 +79,7 @@ async function appendRow(sheetName, headers, data) {
 }
 
 async function updateRow(sheetName, rowIndex, headers, data) {
+  if (!SHEETS_ENABLED) return
   // rowIndex é 0-based entre os dados; +1 para o cabeçalho; +1 para base 1 do Sheets
   const sheetRow = rowIndex + 2
   await sheets.spreadsheets.values.update({
@@ -82,6 +91,7 @@ async function updateRow(sheetName, rowIndex, headers, data) {
 }
 
 async function deleteRow(sheetName, rowIndex) {
+  if (!SHEETS_ENABLED) return
   const spreadsheet = await sheets.spreadsheets.get({ spreadsheetId: SPREADSHEET_ID })
   const sheet = spreadsheet.data.sheets.find(s => s.properties.title === sheetName)
   if (!sheet) throw new Error(`Aba "${sheetName}" não encontrada`)
@@ -259,6 +269,7 @@ const users = {
 
 const config = {
   async get() {
+    if (!SHEETS_ENABLED) return { mode: 'open', allowedAdminDomain: null, setupCompleted: true }
     const rows = await readRows(SHEETS.config)
     if (!rows.length) return { mode: 'closed', allowedAdminDomain: null, setupCompleted: false }
     return parseRow(rows[0])

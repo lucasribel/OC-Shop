@@ -136,19 +136,7 @@ export async function createOrder(data: CreateOrderInput): Promise<Order> {
     status: 'pending',
   }
 
-  const order = await orderRepo.create(fullOrder)
-
-  // Descontar estoque
-  for (const item of data.items) {
-    const product = await productRepo.findById(item.productId)
-    if (product) {
-      await productRepo.update(item.productId, {
-        stock: product.stock - item.quantity,
-      })
-    }
-  }
-
-  return order
+  return orderRepo.create(fullOrder)
 }
 
 export async function updateOrderStatus(
@@ -232,7 +220,7 @@ export const api = {
         }
       }
 
-      const order = await orderRepo.create({
+      return orderRepo.create({
         conferenceId: data.conferenceId,
         conferenceSlug: data.conferenceSlug,
         userId: data.userId,
@@ -244,18 +232,6 @@ export const api = {
         total: data.total,
         status: 'pending',
       })
-
-      // Descontar estoque
-      for (const item of data.items) {
-        const product = await productRepo.findById(item.productId)
-        if (product) {
-          await productRepo.update(item.productId, {
-            stock: product.stock - item.quantity,
-          })
-        }
-      }
-
-      return order
     },
   },
   users: {
