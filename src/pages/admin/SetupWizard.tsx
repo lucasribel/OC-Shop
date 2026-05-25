@@ -23,17 +23,25 @@ function StepNumber({ n, active, done }: { n: number; active: boolean; done: boo
 export default function SetupWizard() {
   const navigate = useNavigate()
   const { user } = useAuthStore()
-  const [step, setStep] = useState(0)
+
+  // Restaura estado do sessionStorage (sobrevive a reload do Vite)
+  const saved = JSON.parse(sessionStorage.getItem('wizard_state') || '{}')
+  const [step, setStep] = useState(saved.step || 0)
   const [loading, setLoading] = useState(false)
   const [msg, setMsg] = useState('')
   const oauthReady = isGoogleAuthConfigured()
-  // Form state
-  const [sheetsEmail, setSheetsEmail] = useState('')
-  const [sheetsKey, setSheetsKey] = useState('')
-  const [spreadsheetId, setSpreadsheetId] = useState('')
-  const [oauthClientId, setOauthClientId] = useState('')
-  const [driveFolderId, setDriveFolderId] = useState('')
+  const [sheetsEmail, setSheetsEmail] = useState(saved.sheetsEmail || '')
+  const [sheetsKey, setSheetsKey] = useState(saved.sheetsKey || '')
+  const [spreadsheetId, setSpreadsheetId] = useState(saved.spreadsheetId || '')
+  const [oauthClientId, setOauthClientId] = useState(saved.oauthClientId || '')
+  const [driveFolderId, setDriveFolderId] = useState(saved.driveFolderId || '')
 
+  // Salva estado toda vez que muda
+  useEffect(() => {
+    sessionStorage.setItem('wizard_state', JSON.stringify({
+      step, sheetsEmail, sheetsKey, spreadsheetId, oauthClientId, driveFolderId
+    }))
+  }, [step, sheetsEmail, sheetsKey, spreadsheetId, oauthClientId, driveFolderId])
   // Load existing config
   useEffect(() => {
     fetch('http://localhost:3001/api/setup/current-env')
