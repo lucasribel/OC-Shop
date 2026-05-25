@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '@/store/useAuthStore'
+import { isGoogleAuthConfigured } from '@/services/googleAuth'
 import { http } from '@/repositories/http/httpClient'
-
 const STEPS = [
   { id: 'google-cloud', title: 'Google Cloud', subtitle: 'Criar projeto e ativar APIs' },
   { id: 'credentials', title: 'Credenciais', subtitle: 'Service Account + OAuth' },
@@ -27,7 +27,7 @@ export default function SetupWizard() {
   const [step, setStep] = useState(0)
   const [loading, setLoading] = useState(false)
   const [msg, setMsg] = useState('')
-
+  const oauthReady = isGoogleAuthConfigured()
   // Form state
   const [sheetsEmail, setSheetsEmail] = useState('')
   const [sheetsKey, setSheetsKey] = useState('')
