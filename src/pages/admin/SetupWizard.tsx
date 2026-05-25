@@ -75,6 +75,15 @@ export default function SetupWizard() {
 
   return (
     <div className="min-h-screen bg-[#F4F6F9]">
+
+      {/* Status banner — mostra se está em modo mock ou real */}
+      <div className={`px-4 py-3 text-center text-sm font-medium ${
+        oauthReady ? 'bg-[#E6F7EE] text-[#00A94F]' : 'bg-[#FFF3E0] text-[#F48024]'
+      }`}>
+        {oauthReady
+          ? '✅ Login Google configurado — OAuth real ativo'
+          : '⚙️ Modo desenvolvimento — login mock. Configure o OAuth Client ID no passo 4 para ativar login real.'}
+      </div>
       {/* Progress bar */}
       <div className="bg-white border-b border-gray-100 shadow-sm">
         <div className="max-w-4xl mx-auto px-4 py-4 flex items-center justify-center gap-2 sm:gap-4">

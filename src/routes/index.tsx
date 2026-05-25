@@ -76,7 +76,7 @@ export const router = createBrowserRouter([
 
       // Admin management pages
       { path: '/admin', element: <RequireAdminAccess><ConferenceSelect /></RequireAdminAccess> },
-      { path: '/admin/setup', element: <RequireAdminAccess><SetupWizard /></RequireAdminAccess> },
+      { path: '/admin/setup', element: <SetupWizard /> },
       { path: '/admin/config', element: <RequireAdminAccess><ConfigPanel /></RequireAdminAccess> },
 
       {
