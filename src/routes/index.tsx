@@ -15,6 +15,8 @@ import Dashboard from '@/pages/admin/Dashboard'
 import AdminEquipe from '@/pages/admin/Equipe'
 import AdminSecoes from '@/pages/admin/Secoes'
 import ConferenceConfig from '@/pages/admin/ConferenceConfig'
+import ConfigPanel from '@/pages/admin/ConfigPanel'
+import SetupWizard from '@/pages/admin/SetupWizard'
 import Setup from '@/pages/Setup'
 
 import { AdminLayout } from '@/components/layout/AdminLayout'
@@ -74,6 +76,9 @@ export const router = createBrowserRouter([
 
       // Admin management pages
       { path: '/admin', element: <RequireAdminAccess><ConferenceSelect /></RequireAdminAccess> },
+      { path: '/admin/setup', element: <RequireAdminAccess><SetupWizard /></RequireAdminAccess> },
+      { path: '/admin/config', element: <RequireAdminAccess><ConfigPanel /></RequireAdminAccess> },
+
       {
         path: '/admin/:slug',
         element: <RequireAdminAccess><AdminLayout><Outlet /></AdminLayout></RequireAdminAccess>,

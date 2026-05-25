@@ -1,15 +1,14 @@
 import { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { useAdminConference } from '@/components/layout/AdminLayout'
 import { api } from '@/services/api'
 import type { Conference } from '@/types'
+import ImageUpload from '@/components/ui/ImageUpload'
 
 function generateSlug(name: string): string {
   return name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, '_').replace(/[^a-z0-9_.]/g, '')
 }
 
 export default function ConferenceConfig() {
-  const navigate = useNavigate()
   const { conference } = useAdminConference()
   const [form, setForm] = useState({
     name: '', slug: '', startDate: '', endDate: '', orderDeadline: '',
@@ -95,14 +94,14 @@ export default function ConferenceConfig() {
           <h3 className="font-display text-base font-semibold text-[#1A1A2E] mb-3">Página do Shop</h3>
           <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">URL do Banner</label>
-              <input type="text" value={form.bannerUrl} onChange={(e) => setForm((f) => ({ ...f, bannerUrl: e.target.value }))} placeholder="https://..." className="w-full rounded-lg border border-gray-200 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#037EF3]/20 focus:border-[#037EF3]" />
+              <label className="block text-sm font-medium text-gray-700 mb-1">Banner</label>
+              <ImageUpload
+                currentUrl={form.bannerUrl}
+                onUpload={(url) => setForm(f => ({ ...f, bannerUrl: url }))}
+                folder="banner"
+                conferenceSlug={form.slug || conference?.slug || ''}
+              />
             </div>
-            {form.bannerUrl && (
-              <div className="relative w-full aspect-[3/1] rounded-xl overflow-hidden bg-gray-100">
-                <img src={form.bannerUrl} alt="Preview" className="w-full h-full object-cover" />
-              </div>
-            )}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Título do Banner (opcional)</label>
               <input type="text" value={form.bannerTitle} onChange={(e) => setForm((f) => ({ ...f, bannerTitle: e.target.value }))} placeholder="Sobrepõe à imagem" className="w-full rounded-lg border border-gray-200 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#037EF3]/20 focus:border-[#037EF3]" />

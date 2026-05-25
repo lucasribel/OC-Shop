@@ -1,7 +1,6 @@
 import { Link, useParams, useNavigate, useLocation } from 'react-router-dom'
 import { useAuthStore } from '@/store/useAuthStore'
 import { RoleBadge } from '@/components/ui'
-import { useState } from 'react'
 
 interface AdminSidebarProps {
   open: boolean
@@ -42,7 +41,6 @@ export function AdminSidebar({ open, onClose }: AdminSidebarProps) {
   const location = useLocation()
   const navigate = useNavigate()
   const { user, logout, isAdmin, isSuperAdmin } = useAuthStore()
-  const [mobileOpen, setMobileOpen] = useState(false)
 
   const handleLogout = async () => {
     await logout()

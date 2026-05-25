@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { api } from '@/services/api'
 import { useAuthStore } from '@/store/useAuthStore'
 import { RoleBadge } from '@/components/ui'
@@ -23,8 +22,7 @@ function ToggleSwitch({ value, onChange, label }: { value: boolean; onChange: (v
 }
 
 export default function SuperAdmin() {
-  const navigate = useNavigate()
-  const { user, logout } = useAuthStore()
+  const { user } = useAuthStore()
   const [config, setConfig] = useState<SystemConfig | null>(null)
   const [admins, setAdmins] = useState<User[]>([])
   const [loading, setLoading] = useState(true)
@@ -63,7 +61,6 @@ export default function SuperAdmin() {
     } catch { setInviteError('Erro ao convidar usuário') } finally { setInviteSaving(false) }
   }
 
-  const handleLogout = async () => { await logout(); navigate('/entrar') }
 
   if (loading) { return <div className="flex items-center justify-center py-20"><div className="animate-spin h-8 w-8 border-4 border-[#037EF3] border-t-transparent rounded-full" /></div> }
   if (!user) return null

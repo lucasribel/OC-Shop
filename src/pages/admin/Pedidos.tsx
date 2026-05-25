@@ -2,7 +2,6 @@ import { useState, useEffect, useRef, useMemo } from 'react'
 import { useAdminConference } from '@/components/layout/AdminLayout'
 import { OrderStatusBadge } from '@/components/ui'
 import { api, updateProduct } from '@/services/api'
-import { formatCurrency, formatDateTime } from '@/utils/format'
 import type { Order, OrderStatus, OrderItem } from '@/types'
 
 // ---------------------------------------------------------------------------
@@ -50,12 +49,10 @@ function itemSummary(items: OrderItem[]): string {
 // ---------------------------------------------------------------------------
 
 function DeleteConfirmation({
-  order,
   onConfirm,
   onCancel,
   deleting,
 }: {
-  order: Order
   onConfirm: () => void
   onCancel: () => void
   deleting: boolean
@@ -279,7 +276,7 @@ export default function AdminPedidos() {
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const debounceRef = useRef<ReturnType<typeof setTimeout>>()
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
 
   // -------------------------------------------------------------------------
   // Debounce search
@@ -641,7 +638,6 @@ export default function AdminPedidos() {
       {/* Delete confirmation */}
       {deleteTarget && (
         <DeleteConfirmation
-          order={deleteTarget}
           onConfirm={handleDelete}
           onCancel={() => setDeleteTarget(null)}
           deleting={deleting}

@@ -127,7 +127,7 @@ export default function Shop() {
               <div className="flex items-start justify-between mb-2">
                 <h3 className="font-semibold text-gray-900">{product.name}</h3>
                 {product.price === 0 && (
-                  <Badge variant="success">Grátis</Badge>
+                  <Badge variant="active">Grátis</Badge>
                 )}
               </div>
               <p className="text-sm text-gray-500 mb-3">{product.description}</p>

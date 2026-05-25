@@ -47,4 +47,37 @@ export class HttpConferenceRepository implements IConferenceRepository {
     const { data } = await http.put<Conference>(`/conferences/${id}`, patch)
     return data
   }
+
+  async addCollaborator(conferenceId: string, userId: string): Promise<Conference> {
+    const conf = await this.findById(conferenceId)
+    if (!conf) throw new Error(`Conference ${conferenceId} not found`)
+    if (!conf.collaboratorIds.includes(userId)) {
+      return this.update(conferenceId, {
+        collaboratorIds: [...conf.collaboratorIds, userId],
+      })
+    }
+    return conf
+  }
+
+  async removeCollaborator(conferenceId: string, userId: string): Promise<Conference> {
+    const conf = await this.findById(conferenceId)
+    if (!conf) throw new Error(`Conference ${conferenceId} not found`)
+    return this.update(conferenceId, {
+      collaboratorIds: conf.collaboratorIds.filter((id) => id !== userId),
+    })
+  }
+
+  async transferOwner(conferenceId: string, newOwnerId: string): Promise<Conference> {
+    const conf = await this.findById(conferenceId)
+    if (!conf) throw new Error(`Conference ${conferenceId} not found`)
+    const oldOwnerId = conf.ownerId
+    const collaboratorIds = conf.collaboratorIds.filter((id) => id !== newOwnerId)
+    if (!collaboratorIds.includes(oldOwnerId)) {
+      collaboratorIds.push(oldOwnerId)
+    }
+    return this.update(conferenceId, {
+      ownerId: newOwnerId,
+      collaboratorIds,
+    })
+  }
 }

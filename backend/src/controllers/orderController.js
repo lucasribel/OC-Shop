@@ -58,4 +58,19 @@ module.exports = {
       res.json(await orders.updateStatus(req.params.id, status))
     } catch (err) { next(err) }
   },
+
+  async update(req, res, next) {
+    try {
+      const current = await orders.findById(req.params.id)
+      if (!current) return res.status(404).json({ error: 'Pedido não encontrado' })
+      res.json(await orders.update(req.params.id, req.body))
+    } catch (err) { next(err) }
+  },
+
+  async delete(req, res, next) {
+    try {
+      await orders.delete(req.params.id)
+      res.json({ success: true })
+    } catch (err) { next(err) }
+  },
 }

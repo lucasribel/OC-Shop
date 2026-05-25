@@ -34,4 +34,13 @@ export class HttpOrderRepository implements IOrderRepository {
     const { data } = await http.put<Order>(`/orders/${id}/status`, { status })
     return data
   }
+
+  async update(id: string, data: Partial<Order>): Promise<Order> {
+    const { data: order } = await http.put<Order>(`/orders/${id}`, data)
+    return order
+  }
+
+  async delete(id: string): Promise<void> {
+    await http.delete(`/orders/${id}`)
+  }
 }

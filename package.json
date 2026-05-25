@@ -8,8 +8,10 @@
     "dev:setup": "vite --mode development.setup",
     "dev:fechado": "vite --mode development.fechado",
     "dev:aberto": "vite --mode development.aberto",
+    "dev:reset": "node scripts/reset-dev-state.js && vite --mode development",
     "build": "tsc -b && vite build",
-    "start": "vite preview",
+    "start": "vite --mode production",
+    "setup": "node scripts/setup.js",
     "lint": "eslint ."
   },
   "dependencies": {

@@ -6,9 +6,13 @@ export function SetupGuard({ children }: { children: ReactNode }) {
   const [setupCompleted, setSetupCompleted] = useState<boolean | null>(null)
 
   useEffect(() => {
-    api.users.getConfig().then((cfg) => {
-      setSetupCompleted(cfg.setupCompleted)
-    })
+    api.users.getConfig()
+      .then((cfg) => setSetupCompleted(cfg.setupCompleted ?? true))
+      .catch(() => {
+        // Backend offline ou erro — assume setup completo e deixa o app rodar
+        console.warn('[SetupGuard] Não foi possível verificar configuração. Assumindo setup completo.')
+        setSetupCompleted(true)
+      })
   }, [])
 
   if (setupCompleted === null) {

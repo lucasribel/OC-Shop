@@ -1,4 +1,4 @@
-import { useState, useEffect, type ReactNode } from 'react'
+import { useState, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { api } from '@/services/api'
 import { useCartStore } from '@/store/useCartStore'

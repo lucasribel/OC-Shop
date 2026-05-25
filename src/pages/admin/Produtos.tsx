@@ -5,6 +5,7 @@ import {
   updateProduct,
   deleteProduct,
 } from '@/services/api'
+import ImageUpload from '@/components/ui/ImageUpload'
 import { Button, Badge, Input } from '@/components/ui'
 import { useAdminConference } from '@/components/layout/AdminLayout'
 import type { Product, ProductVariant } from '@/types'
@@ -101,7 +102,6 @@ export default function AdminProdutos() {
   const [validation, setValidation] = useState<Record<string, string>>({})
   const [deleteTarget, setDeleteTarget] = useState<Product | null>(null)
   const [deleting, setDeleting] = useState(false)
-  const [imagePreviewFailed, setImagePreviewFailed] = useState(false)
   const [variantOptionInputs, setVariantOptionInputs] = useState<string[]>([])
 
   // -----------------------------------------------------------------------
@@ -145,7 +145,6 @@ export default function AdminProdutos() {
     setEditTarget(null)
     setError(null)
     setValidation({})
-    setImagePreviewFailed(false)
     setVariantOptionInputs([])
     setView('form')
   }
@@ -165,7 +164,6 @@ export default function AdminProdutos() {
     setEditTarget(product)
     setError(null)
     setValidation({})
-    setImagePreviewFailed(false)
     rebuildOptionInputs(product.variants)
     setView('form')
   }
@@ -646,48 +644,15 @@ export default function AdminProdutos() {
             />
           </div>
 
-          {/* URL da Imagem + preview */}
+          {/* Imagem do Produto */}
           <div>
-            <Input
-              label="URL da Imagem"
-              value={form.image}
-              onChange={(e) => {
-                updateField('image', e.target.value)
-                setImagePreviewFailed(false)
-              }}
+            <ImageUpload
+              currentUrl={form.image}
+              onUpload={(url) => setForm(f => ({ ...f, image: url }))}
+              folder="product"
+              conferenceSlug={conference?.slug || ''}
+              productSlug={form.name ? form.name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '') : 'product'}
             />
-            {form.image && (
-              <div className="mt-2">
-                <div className="w-[120px] h-[90px] rounded-lg bg-gray-100 overflow-hidden relative border border-gray-200">
-                  {!imagePreviewFailed ? (
-                    <img
-                      key={form.image}
-                      src={form.image}
-                      alt="Preview"
-                      className="w-full h-full object-cover"
-                      onError={() => setImagePreviewFailed(true)}
-                    />
-                  ) : null}
-                  {imagePreviewFailed && (
-                    <div className="w-full h-full flex items-center justify-center">
-                      <svg
-                        className="w-6 h-6 text-gray-400"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
-                        />
-                      </svg>
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
           </div>
 
           {/* Produto ativo toggle */}

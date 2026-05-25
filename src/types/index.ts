@@ -10,6 +10,14 @@ export interface SystemConfig {
   mode: SystemMode
   allowedAdminDomain: string | null
   setupCompleted: boolean
+  aiesecName?: string
+  pixKey?: string
+  pixName?: string
+  pixInstructions?: string
+  spreadsheetId?: string
+  spreadsheetUrl?: string
+  driveFolderId?: string
+  driveFolderUrl?: string
 }
 
 // ---------------------------------------------------------------------------

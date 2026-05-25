@@ -17,5 +17,10 @@ router.post('/', ctrl.create)
 
 // PUT /api/orders/:id/status  (admin)
 router.put('/:id/status', authMiddleware, ctrl.updateStatus)
+// PUT /api/orders/:id  (admin — atualização genérica)
+router.put('/:id', authMiddleware, ctrl.update)
+
+// DELETE /api/orders/:id  (admin)
+router.delete('/:id', authMiddleware, ctrl.delete)
 
 module.exports = router

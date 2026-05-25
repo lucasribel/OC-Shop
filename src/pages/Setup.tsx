@@ -9,7 +9,7 @@ function SetupIllustration() {
       {/* Globe */}
       <circle cx="80" cy="55" r="35" stroke="#037EF3" strokeWidth="2" opacity="0.3" />
       <ellipse cx="80" cy="55" rx="18" ry="35" stroke="#037EF3" strokeWidth="1.5" opacity="0.3" />
-      <ellipse cx="80" cy="55" rx="35" ry="14" stroke="#037EF3" strokeWidth="1.5" opacity="0.3" lineTransform="rotate(-30 80 55)" />
+      <ellipse cx="80" cy="55" rx="35" ry="14" stroke="#037EF3" strokeWidth="1.5" opacity="0.3" transform="rotate(-30 80 55)" />
       {/* Pins */}
       <circle cx="55" cy="48" r="3" fill="#00A94F" />
       <circle cx="95" cy="38" r="3" fill="#037EF3" />

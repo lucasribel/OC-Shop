@@ -212,7 +212,7 @@ export default function ConferenceShopPage() {
   const { slug } = useParams<{ slug: string }>()
   const navigate = useNavigate()
   const user = useAuthStore((s) => s.user)
-  const { items, itemCount, total } = useCartStore()
+  const { itemCount, total } = useCartStore()
 
   const [conference, setConference] = useState<Conference | null>(null)
   const [products, setProducts] = useState<Product[]>([])
@@ -221,7 +221,7 @@ const [sections, setSections] = useState<ProductSection[]>([])
   const [notFound, setNotFound] = useState(false)
   const [checkoutOpen, setCheckoutOpen] = useState(false)
   const [checkOrderOpen, setCheckOrderOpen] = useState(false)
-  const [checkoutSuccess, setCheckoutSuccess] = useState(false)
+  const [_checkoutSuccess, setCheckoutSuccess] = useState(false)
 
   useEffect(() => {
     async function load() {
