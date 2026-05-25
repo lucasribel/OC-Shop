@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '@/store/useAuthStore'
 import { isGoogleAuthConfigured } from '@/services/googleAuth'
-import { http } from '@/repositories/http/httpClient'
 const STEPS = [
   { id: 'google-cloud', title: 'Google Cloud', subtitle: 'Criar projeto e ativar APIs' },
   { id: 'credentials', title: 'Credenciais', subtitle: 'Service Account + OAuth' },
@@ -37,29 +36,36 @@ export default function SetupWizard() {
 
   // Load existing config
   useEffect(() => {
-    http.get('/setup/current-env').then(r => {
-      if (r.data.GOOGLE_SHEETS_CLIENT_EMAIL) setSheetsEmail(r.data.GOOGLE_SHEETS_CLIENT_EMAIL)
-      if (r.data.SPREADSHEET_ID) setSpreadsheetId(r.data.SPREADSHEET_ID)
-      if (r.data.VITE_OAUTH_CLIENT_ID) setOauthClientId(r.data.VITE_OAUTH_CLIENT_ID)
-      if (r.data.DRIVE_FOLDER_ID) setDriveFolderId(r.data.DRIVE_FOLDER_ID)
-    }).catch(() => {})
+    fetch('http://localhost:3001/api/setup/current-env')
+      .then(r => r.json())
+      .then(data => {
+        if (data.GOOGLE_SHEETS_CLIENT_EMAIL) setSheetsEmail(data.GOOGLE_SHEETS_CLIENT_EMAIL)
+        if (data.SPREADSHEET_ID) setSpreadsheetId(data.SPREADSHEET_ID)
+        if (data.VITE_OAUTH_CLIENT_ID) setOauthClientId(data.VITE_OAUTH_CLIENT_ID)
+        if (data.DRIVE_FOLDER_ID) setDriveFolderId(data.DRIVE_FOLDER_ID)
+      }).catch(() => {})
   }, [])
 
   const saveConfig = async (goToStep?: number) => {
     setLoading(true)
     setMsg('')
     try {
-      await http.post('/setup/save-env', {
-        googleSheetsClientEmail: sheetsEmail,
-        googleSheetsPrivateKey: sheetsKey,
-        spreadsheetId,
-        oauthClientId,
-        driveFolderId,
+      const res = await fetch('http://localhost:3001/api/setup/save-env', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          googleSheetsClientEmail: sheetsEmail,
+          googleSheetsPrivateKey: sheetsKey,
+          spreadsheetId,
+          oauthClientId,
+          driveFolderId,
+        }),
       })
-      setMsg('✅ Salvo! Reinicie o backend para aplicar.')
+      if (!res.ok) throw new Error('Erro ' + res.status)
+      setMsg('✅ Salvo! Reinicie o backend (Ctrl+C) e frontend — depois rode de novo.')
       if (goToStep !== undefined) setStep(goToStep)
     } catch {
-      setMsg('❌ Erro ao salvar')
+      setMsg('❌ Erro ao salvar. O backend (localhost:3001) está rodando?')
     } finally {
       setLoading(false)
     }
