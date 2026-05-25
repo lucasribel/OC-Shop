@@ -54,13 +54,15 @@
 
 1. Menu lateral: **APIs e serviços** → **Tela de consentimento OAuth**
 2. Tipo: **Externo** → **CRIAR**
-3. Preencha só os campos obrigatórios (nome, e-mail) → **SALVAR E CONTINUAR**
-4. Menu lateral: **Credenciais** → **+ CRIAR** → **ID do cliente OAuth**
-5. Tipo: **Aplicativo da Web**. Nome: `AIESEC Shop`
-6. Origens autorizadas: `http://localhost:5173`
-7. URIs de redirecionamento: `http://localhost:5173`
-8. **CRIAR** → copie o **ID do cliente**
-
+3. Preencha só os campos obrigatórios (nome, e-mail) → **SALVAR E CONTINUAR** até finalizar
+4. ⚠️ Após criar, clique em **PUBLICAR APP** (embaixo do nome do app). Se estiver como "Teste", adicione seu e-mail em **Test users**.
+5. Menu lateral: **Credenciais** → **+ CRIAR** → **ID do cliente OAuth**
+6. Tipo: **Aplicativo da Web**
+7. ⚠️ **Origens JavaScript autorizadas** — adicione:
+   - `http://localhost:5173`
+8. ⚠️ **URIs de redirecionamento autorizados** — adicione:
+   - `http://localhost:5173`
+9. **CRIAR** → copie o **ID do cliente**
 ---
 
 ## PASSO 6 — Colar no wizard
