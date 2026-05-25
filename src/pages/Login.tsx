@@ -11,11 +11,9 @@ export default function Login() {
 
   const handleLogin = async () => {
     if (oauthReady) {
-      // OAuth real — o callback via evento 'ocshop:login' faz o redirect
       login()
       return
     }
-    // Mock
     await login()
     navigate('/shop')
   }
@@ -30,13 +28,11 @@ export default function Login() {
 
           <h1 className="text-2xl font-bold text-gray-900 mb-2">AIESEC Shop</h1>
           <p className="text-sm text-gray-500 mb-8">
-            {oauthReady
-              ? 'Entre com sua conta Google'
-              : 'Faça login para acessar a loja da conferência'}
+            {oauthReady ? 'Entre com sua conta Google' : 'Faça login para acessar a loja'}
           </p>
 
           {error && (
-            <div className="mb-4 p-3 rounded-lg bg-red-50 text-red-700 text-sm">{error}</div>
+            <div className="mb-4 p-3 rounded-lg bg-red-50 border border-red-200 text-sm text-red-700">{error}</div>
           )}
 
           <Button onClick={handleLogin} loading={loading} size="lg" className="w-full">
@@ -50,9 +46,18 @@ export default function Login() {
           </Button>
 
           {!oauthReady && (
-            <p className="mt-4 text-xs text-gray-400">
-              Para salvar o histórico dos seus pedidos
-            </p>
+            <p className="mt-4 text-xs text-gray-400">Modo desenvolvimento — login mock</p>
+          )}
+
+          {oauthReady && (
+            <div className="mt-4 p-3 rounded-lg bg-[#E8F4FE] border border-[#037EF3]/20 text-xs text-left text-gray-600">
+              <p className="font-semibold mb-1">Se o login falhar com erro 403:</p>
+              <p>1. Abra <a href="https://console.cloud.google.com/apis/credentials" target="_blank" className="underline text-[#037EF3]">console.cloud.google.com/apis/credentials</a></p>
+              <p>2. Clique no ID do cliente OAuth</p>
+              <p>3. Em <strong>Origens JavaScript autorizadas</strong>, verifique se tem <code className="bg-gray-100 px-1 rounded">http://localhost:5173</code></p>
+              <p>4. Em <strong>URIs de redirecionamento</strong>, verifique se tem <code className="bg-gray-100 px-1 rounded">http://localhost:5173</code></p>
+              <p>5. Volte em <strong>Tela de consentimento OAuth</strong> e clique <strong>PUBLICAR APP</strong></p>
+            </div>
           )}
         </div>
       </div>
