@@ -21,8 +21,48 @@ const HEADERS = {
   config: ['mode', 'allowedAdminDomain', 'setupCompleted'],
 }
 
-// ─── Read ─────────────────────────────────
+// ─── Auto-create tabs ────────────────────
 
+async function ensureTabs() {
+  if (!SHEETS_ENABLED) return
+  try {
+    const meta = await sheets.spreadsheets.get({ spreadsheetId: SPREADSHEET_ID })
+    const existingTabs = new Set(meta.data.sheets.map(s => s.properties.title))
+    const needed = Object.values(SHEET_NAMES)
+    const missing = needed.filter(t => !existingTabs.has(t))
+    if (missing.length > 0) {
+      console.log('[sheetsService] Criando abas:', missing.join(', '))
+      await sheets.spreadsheets.batchUpdate({
+        spreadsheetId: SPREADSHEET_ID,
+        requestBody: {
+          requests: missing.map(title => ({
+            addSheet: { properties: { title, gridProperties: { rowCount: 1000, columnCount: 20 } } }
+          }))
+        }
+      })
+      // Populate headers for each new tab
+      for (const title of missing) {
+        const key = Object.entries(SHEET_NAMES).find(([, v]) => v === title)?.[0]
+        if (key && HEADERS[key]) {
+          await sheets.spreadsheets.values.update({
+            spreadsheetId: SPREADSHEET_ID,
+            range: `${title}!A1`,
+            valueInputOption: 'RAW',
+            requestBody: { values: [HEADERS[key]] }
+          })
+        }
+      }
+      console.log('[sheetsService] Abas criadas e cabeçalhos populados!')
+    }
+  } catch (err) {
+    console.warn('[sheetsService] Erro ao criar abas:', err.message)
+  }
+}
+
+// Executa na inicialização
+ensureTabs()
+
+// ─── Read ─────────────────────────────────
 async function readRows(sheetName) {
   if (!SHEETS_ENABLED) {
     const keyMap = { Conferences: 'conferences', Products: 'products', Orders: 'orders', Users: 'users', Config: 'config' }
@@ -38,14 +78,20 @@ async function readRows(sheetName) {
       return row
     })
   }
-  const res = await sheets.spreadsheets.values.get({ spreadsheetId: SPREADSHEET_ID, range: `${sheetName}!A:Z` })
-  const rows = res.data.values || []
-  if (rows.length < 2) return []
-  const headers = rows[0]
-  return rows.slice(1).map(row => Object.fromEntries(headers.map((h, i) => [h, row[i] ?? ''])))
+  try {
+    const res = await sheets.spreadsheets.values.get({ spreadsheetId: SPREADSHEET_ID, range: `${sheetName}!A:Z` })
+    const rows = res.data.values || []
+    if (rows.length < 2) return []
+    const headers = rows[0]
+    return rows.slice(1).map(row => Object.fromEntries(headers.map((h, i) => [h, row[i] ?? ''])))
+  } catch (err) {
+    if (err.code === 400 || err.code === 404) {
+      // A aba não existe ainda — retorna vazio, o auto-create vai criar
+      return []
+    }
+    throw err
+  }
 }
-
-// ─── Helpers ──────────────────────────────
 
 function parseRow(row, jsonFields = []) {
   const parsed = { ...row }
