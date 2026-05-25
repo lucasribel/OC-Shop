@@ -1,56 +1,38 @@
 /**
- * Google OAuth abstraction layer.
- *
- * Hoje: simulação (login / logout mockados).
- * Amanhã: integrar com @react-oauth/google ou Firebase Auth.
- *
- * NUNCA importar bibliotecas OAuth diretamente nos componentes.
+ * Autenticação — Google OAuth real ou mock de desenvolvimento.
  */
 
 import type { User } from '@/types'
+import { initGoogleAuth, triggerGoogleLogin, isGoogleAuthConfigured } from './googleAuth'
+import { api } from './api'
 
-const MOCK_USER: User = {
-  id: 'u4',
-  email: 'maria.silva@gmail.com',
-  name: 'Maria Silva',
-  picture: undefined,
-  role: 'user',
-  aiesec: 'AIESEC Brasil',
-}
-
-const MOCK_ADM: User = {
-  id: 'u2',
-  email: 'admin@aiesec.net',
-  name: 'Admin AIESEC SP',
-  picture: undefined,
-  role: 'admin',
-  aiesec: 'AIESEC São Paulo',
-  conferenceIds: ['conf1', 'conf2'],
-}
-
-const MOCK_SUPER: User = {
-  id: 'u1',
-  email: 'super@aiesec.net',
-  name: 'Super Admin',
-  picture: undefined,
-  role: 'super_admin',
-  aiesec: 'AIESEC Brasil',
-}
-
+// Mock apenas para dev sem Client ID
 let currentUser: User | null = null
-let userIndex = 0
-const mockUsers = [MOCK_USER, MOCK_ADM, MOCK_SUPER]
+let mockIndex = 0
+const mockUsers = ['super@aiesec.net', 'admin@aiesec.net', 'ana@aiesec.net']
 
-export async function signInWithGoogle(): Promise<User> {
-  // Simula popup OAuth — alterna entre perfis para teste
-  await new Promise((r) => setTimeout(r, 600))
-  currentUser = mockUsers[userIndex % mockUsers.length]
-  userIndex++
+/**
+ * Login — tenta OAuth real primeiro, fallback para mock em dev.
+ */
+export async function signInWithGoogle(): Promise<User | null> {
+  // Se OAuth está configurado, usa Google real
+  if (isGoogleAuthConfigured()) {
+    initGoogleAuth()
+    triggerGoogleLogin()
+    // O callback handleCredentialResponse vai setar o user via useAuthStore
+    // Retornamos null porque o fluxo é assíncrono via callback
+    return null
+  }
+
+  // Mock fallback
+  await new Promise((r) => setTimeout(r, 400))
+  const email = mockUsers[mockIndex % mockUsers.length]
+  mockIndex++
+  currentUser = await api.users.getByEmail(email)
   return currentUser
 }
 
 export async function signOut(): Promise<void> {
-  await new Promise((r) => setTimeout(r, 200))
   currentUser = null
 }
 

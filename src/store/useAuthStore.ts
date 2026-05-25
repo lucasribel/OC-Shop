@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import type { User } from '@/types'
 import { signInWithGoogle, signOut } from '@/services/auth'
+import { isGoogleAuthConfigured } from '@/services/googleAuth'
 
 interface AuthState {
   user: User | null
@@ -22,6 +23,32 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   login: async () => {
     set({ loading: true, error: null })
+
+    // Se OAuth real está configurado, escuta o evento de callback
+    if (isGoogleAuthConfigured()) {
+      const handleLoginEvent = (e: Event) => {
+        const user = (e as CustomEvent).detail as User
+        set({ user, loading: false })
+      }
+      const handleErrorEvent = (e: Event) => {
+        const msg = (e as CustomEvent).detail as string
+        set({ error: msg || 'Falha ao autenticar', loading: false })
+      }
+
+      window.addEventListener('ocshop:login', handleLoginEvent, { once: true })
+      window.addEventListener('ocshop:login-error', handleErrorEvent, { once: true })
+
+      // Dispara o login
+      const result = await signInWithGoogle()
+
+      // Timeout de segurança
+      setTimeout(() => {
+        set({ loading: false, error: get().user ? null : 'Tempo esgotado. Tente novamente.' })
+      }, 30000)
+      return
+    }
+
+    // Mock fallback
     try {
       const user = await signInWithGoogle()
       set({ user, loading: false })

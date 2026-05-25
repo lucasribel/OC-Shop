@@ -1,7 +1,7 @@
 # OC-Shop — Guia de Configuração Completo
 
-> **Não precisa de terminal.** Tudo é feito pelo navegador e pela interface do Google Cloud.
-> O wizard de configuração (`/admin/setup`) vai te guiar passo a passo.
+> **Tudo pelo navegador.** Zero terminal para configurar.
+> O wizard em `/admin/setup` te guia visualmente.
 
 ---
 
@@ -14,90 +14,102 @@
 
 ## PASSO 1 — Criar projeto no Google Cloud
 
-1. Abra **[console.cloud.google.com](https://console.cloud.google.com)** no navegador
-2. No topo, clique no seletor de projeto (ao lado de "Google Cloud") → **NOVO PROJETO**
-3. Nome: `AIESEC Shop`
-4. Clique **CRIAR**. Aguarde 5 segundos.
+1. Abra **[console.cloud.google.com](https://console.cloud.google.com)**
+2. No topo, clique no seletor de projeto → **NOVO PROJETO**
+3. Nome: `AIESEC Shop`. Clique **CRIAR**.
 
 ---
 
-## PASSO 2 — Ativar as APIs necessárias
+## PASSO 2 — Ativar as APIs
 
-1. No menu lateral esquerdo: **APIs e serviços** → **Biblioteca**
-2. Pesquise e clique em cada uma destas APIs, depois clique **ATIVAR**:
+1. Menu lateral: **APIs e serviços** → **Biblioteca**
+2. Pesquise, clique e **ATIVE** cada uma:
    - ✅ **Google Sheets API**
    - ✅ **Google Drive API**
-   - ⚠️ **Google OAuth API** (se quiser login Google real)
 
 ---
 
-## PASSO 3 — Criar credenciais (Service Account)
-
-> A Service Account é um "robô" que o backend usa para ler/escrever na planilha.
+## PASSO 3 — Service Account (acesso às planilhas)
 
 1. Menu lateral: **APIs e serviços** → **Credenciais**
 2. Clique **+ CRIAR CREDENCIAIS** → **Conta de serviço**
-3. Nome: `aiesec-shop-sheets`
-4. Clique **CRIAR E CONCLUIR** (ignorar permissões por enquanto)
-5. Clique na conta criada na lista
-6. Aba **Chaves** → **ADICIONAR CHAVE** → **Criar nova chave** → **JSON**
-7. Um arquivo `.json` será baixado. **Abra ele** no Bloco de Notas.
-8. Copie estes dois valores:
-   - `"client_email"` — parece um e-mail terminado em `iam.gserviceaccount.com`
-   - `"private_key"` — começa com `-----BEGIN PRIVATE KEY-----`
+3. Nome: `aiesec-shop-sheets`. Clique **CRIAR E CONCLUIR**.
+4. Clique na conta criada. Aba **Chaves** → **ADICIONAR CHAVE** → **Criar nova chave** → **JSON**.
+5. Um arquivo será baixado. **Abra no Bloco de Notas**.
+6. Copie estes dois valores:
+   - `"client_email"` → parece `aiesec-shop@...iam.gserviceaccount.com`
+   - `"private_key"` → começa com `-----BEGIN PRIVATE KEY-----`
 
 ---
 
 ## PASSO 4 — Criar a planilha
 
-1. Abra **[sheets.google.com](https://sheets.google.com)**
-2. Clique **+ Em branco** para criar uma nova planilha
-3. Dê o nome: `AIESEC Shop - Produção`
-4. Clique em **Compartilhar** (canto superior direito)
-5. Cole o e-mail da Service Account (o `client_email` do passo 3)
-6. Mude de "Leitor" para **Editor**
-7. Clique **Enviar**
-8. Olhe a URL do navegador: `https://docs.google.com/spreadsheets/d/XXXXXXX/edit`
-   - Copie o `XXXXXXX` — esse é o **ID da planilha**
+1. Abra **[sheets.google.com](https://sheets.google.com)** → **+ Em branco**
+2. Nome: `AIESEC Shop - Produção`
+3. **Compartilhar** → cole o e-mail da Service Account → **Editor** → Enviar
+4. Copie o ID da URL: `docs.google.com/spreadsheets/d/`**`XXXXXXX`**`/edit`
 
 ---
 
-## PASSO 5 — Criar credenciais OAuth (login Google)
+## PASSO 5 — Login Google (OAuth)
 
-> Isso é necessário para o botão "Entrar com Google" funcionar de verdade.
+> É ISSO que faz o botão "Entrar com Google" funcionar de verdade.
 
-1. Menu lateral: **APIs e serviços** → **Credenciais**
-2. Clique **+ CRIAR CREDENCIAIS** → **ID do cliente OAuth**
-3. Se pedir para configurar a tela de consentimento:
-   - Tipo: **Externo**
-   - Preencha: Nome do app = `AIESEC Shop`, E-mail de suporte = seu e-mail
-   - Domínios autorizados: deixe vazio
-   - Salve e continue
-4. Tipo de aplicativo: **Aplicativo da Web**
-5. Nome: `AIESEC Shop Frontend`
-6. Origens JavaScript autorizadas:
-   - `http://localhost:5173` (desenvolvimento)
-   - `https://oc-shop.pages.dev` (produção, depois de fazer deploy)
-7. URIs de redirecionamento: deixe vazio
-8. Clique **CRIAR**
-9. Copie o **ID do cliente** (parece `123456789-xxxxx.apps.googleusercontent.com`)
-
----
-
-## PASSO 6 — Abrir o wizard de configuração
-
-1. Rode o sistema: `npm run dev` e `cd backend && npm run dev`
-2. Acesse `http://localhost:5173/admin/setup`
-3. O wizard vai pedir cada valor nos passos certos.
-4. Cole as credenciais nos campos e clique **Salvar** em cada etapa.
+1. Menu lateral: **APIs e serviços** → **Tela de consentimento OAuth**
+2. Tipo de usuário: **Externo** → **CRIAR**
+3. Preencha:
+   - Nome do app: `AIESEC Shop`
+   - E-mail de suporte: seu e-mail
+   - (O resto pode deixar em branco)
+   - Clique **SALVAR E CONTINUAR** até finalizar
+4. Menu lateral: **APIs e serviços** → **Credenciais**
+5. **+ CRIAR CREDENCIAIS** → **ID do cliente OAuth**
+6. Tipo: **Aplicativo da Web**
+7. Nome: `AIESEC Shop Frontend`
+8. **Origens JavaScript autorizadas** — adicione:
+   - `http://localhost:5173`
+9. **URIs de redirecionamento autorizados** — adicione:
+   - `http://localhost:5173`
+10. Clique **CRIAR**
+11. Copie o **ID do cliente** (ex: `123456789-xxxxx.apps.googleusercontent.com`)
 
 ---
 
-## Resumo do que você precisa ter em mãos
+## PASSO 6 — Colar as credenciais no wizard
 
-| Campo | Onde encontrar | Exemplo |
+1. Rode o sistema: `npm run dev` + `cd backend && npm run dev`
+2. Acesse **`http://localhost:5173/admin/setup`**
+3. O wizard vai pedir cada valor nos passos certos. Cole e salve.
+
+---
+
+## PASSO 7 — Reiniciar
+
+```bash
+# Mate os dois terminais (Ctrl+C) e rode de novo:
+cd backend && npm run dev
+npm run dev
+```
+
+---
+
+## Resumo: o que você precisa ter em mãos
+
+| Campo | Vem de | Exemplo |
 |---|---|---|
 | Planilha ID | URL da planilha | `1a2b3c4d5e6f...` |
-| Service Account E-mail | Arquivo JSON, campo `client_email` | `aiesec-shop-sheets@...iam.gserviceaccount.com` |
-| Service Account Chave | Arquivo JSON, campo `private_key` | `-----BEGIN PRIVATE KEY-----\n...` |
-| OAuth Client ID | Google Cloud → Credenciais | `123456789-xxxxx.apps.googleusercontent.com` |
+| Service Account E-mail | JSON baixado, campo `client_email` | `...@...iam.gserviceaccount.com` |
+| Service Account Chave | JSON baixado, campo `private_key` | `-----BEGIN PRIVATE KEY-----\n...` |
+| OAuth Client ID | Credenciais → ID do cliente OAuth | `123456789-xxxxx.apps.googleusercontent.com` |
+| Drive Folder ID | URL da pasta no Drive | (opcional) |
+
+---
+
+## O que cada credencial faz
+
+| Credencial | Função |
+|---|---|
+| Service Account | O backend usa para **ler e escrever** na planilha |
+| OAuth Client ID | O frontend usa para o botão **"Entrar com Google"** |
+| Planilha ID | **Onde** os dados ficam salvos |
+| Drive Folder ID | **Onde** as imagens de produtos são salvas |

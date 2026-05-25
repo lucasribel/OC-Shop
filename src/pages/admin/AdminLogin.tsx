@@ -2,20 +2,23 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '@/store/useAuthStore'
 import { api } from '@/services/api'
+import { isGoogleAuthConfigured } from '@/services/googleAuth'
 
 let mockCycleIndex = 0
 const MOCK_EMAILS = ['super@aiesec.net', 'admin@aiesec.net', 'ana@aiesec.net']
 
 export default function AdminLogin() {
   const navigate = useNavigate()
-  const { user, setUser } = useAuthStore()
+  const { user, setUser, login } = useAuthStore()
   const [loading, setLoading] = useState(false)
   const [allowedDomain, setAllowedDomain] = useState<string | null>(null)
+  const oauthReady = isGoogleAuthConfigured()
 
   useEffect(() => {
     api.users.getConfig().then((cfg) => setAllowedDomain(cfg.allowedAdminDomain))
   }, [])
 
+  // Redirect when user is set
   useEffect(() => {
     if (user && useAuthStore.getState().isCollaborator()) {
       navigate('/admin', { replace: true })
@@ -23,14 +26,16 @@ export default function AdminLogin() {
   }, [user, navigate])
 
   const handleLogin = async () => {
+    if (oauthReady) {
+      login()
+      return
+    }
+    // Mock
     setLoading(true)
     const email = MOCK_EMAILS[mockCycleIndex % MOCK_EMAILS.length]
     mockCycleIndex++
-
     const mockUser = await api.users.getByEmail(email)
-    if (mockUser) {
-      setUser(mockUser)
-    }
+    if (mockUser) setUser(mockUser)
     setLoading(false)
   }
 
@@ -38,25 +43,19 @@ export default function AdminLogin() {
     <div className="min-h-screen bg-[#F4F6F9] flex items-center justify-center px-4">
       <div className="w-full max-w-sm">
         <div className="bg-white rounded-2xl shadow-lg p-8 text-center">
-          {/* Logo */}
           <div className="inline-flex items-center justify-center w-14 h-14 rounded-xl bg-[#037EF3] mb-5">
             <svg className="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 100 4 2 2 0 000-4z" />
             </svg>
           </div>
 
-          <h1 className="font-display text-xl font-bold text-[#1A1A2E] mb-1">
-            Painel de Administração
-          </h1>
+          <h1 className="font-display text-xl font-bold text-[#1A1A2E] mb-1">Painel de Administração</h1>
           <p className="text-sm text-gray-500 mb-7">
-            Acesse com sua conta Google
+            {oauthReady ? 'Acesse com sua conta Google' : 'Acesso exclusivo para administradores'}
           </p>
 
-          <button
-            onClick={handleLogin}
-            disabled={loading}
-            className="w-full flex items-center justify-center gap-3 px-5 py-3 rounded-xl text-sm font-semibold text-gray-700 bg-white border border-gray-200 shadow-sm hover:shadow-md hover:border-gray-300 transition-all disabled:opacity-50 disabled:cursor-wait"
-          >
+          <button onClick={handleLogin} disabled={loading}
+            className="w-full flex items-center justify-center gap-3 px-5 py-3 rounded-xl text-sm font-semibold text-gray-700 bg-white border border-gray-200 shadow-sm hover:shadow-md hover:border-gray-300 transition-all disabled:opacity-50 disabled:cursor-wait">
             {loading ? (
               <svg className="animate-spin h-5 w-5 text-[#037EF3]" fill="none" viewBox="0 0 24 24">
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
@@ -80,10 +79,8 @@ export default function AdminLogin() {
             </div>
           )}
 
-          {import.meta.env.DEV && (
-            <p className="mt-4 text-xs text-gray-400">
-              ⚙️ Modo desenvolvimento — clique para trocar de perfil
-            </p>
+          {!oauthReady && import.meta.env.DEV && (
+            <p className="mt-4 text-xs text-gray-400">⚙️ Modo dev — clique para trocar de perfil</p>
           )}
         </div>
       </div>
