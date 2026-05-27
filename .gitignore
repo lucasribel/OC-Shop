@@ -26,3 +26,8 @@ gcloud/
 gcloud.zip
 GoogleCloudSDKInstaller.exe
 deploy.zip
+gcloud/
+gcloud.zip
+deploy.zip
+GoogleCloudSDKInstaller.exe
+tmpkey.txt

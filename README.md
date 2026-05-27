@@ -1,111 +1,95 @@
-# OC-Shop — Guia de Configuração
+# AIESEC Shop
 
-> **Tudo pelo navegador. Zero terminal.**
-> Entre em `http://localhost:5173/admin/setup` e siga os passos.
-
----
-
-## Pré-requisitos
-
-- Uma conta Google
-- 20 minutos
+Loja de conferências da AIESEC Brasil. **Grátis. Sem servidor.** Roda 100% no Cloudflare Pages + Google Sheets.
 
 ---
 
-## PASSO 1 — Criar projeto no Google Cloud
+## 🚀 Deploy em 5 minutos
 
-1. Abra **[console.cloud.google.com](https://console.cloud.google.com)**
-2. No topo, clique no seletor de projeto → **NOVO PROJETO**
-3. Nome: `AIESEC Shop`. Clique **CRIAR**.
+### Você vai precisar de:
 
----
+- Uma conta Google (pessoal ou da sua AIESEC)
+- Conta gratuita no [Cloudflare](https://dash.cloudflare.com)
 
-## PASSO 2 — Ativar as APIs
+### Passo 1 — Criar projeto no Google Cloud
 
-1. Menu lateral: **APIs e serviços** → **Biblioteca**
-2. Pesquise, clique e **ATIVE** cada uma:
-   - ✅ **Google Sheets API**
-   - ✅ **Google Drive API**
+1. Acesse **[console.cloud.google.com](https://console.cloud.google.com)**
+2. Clique no seletor de projeto no topo → **NOVO PROJETO**
+3. Nome: `AIESEC Shop` → **CRIAR**
 
----
+### Passo 2 — Ativar APIs
 
-## PASSO 3 — Service Account
+Menu lateral: **APIs e serviços** → **Biblioteca**. Ative:
+- ✅ Google Sheets API
+- ✅ Google Drive API
 
-1. Menu lateral: **APIs e serviços** → **Credenciais**
-2. **+ CRIAR CREDENCIAIS** → **Conta de serviço**
-3. Nome: `aiesec-shop-sheets`. **CRIAR E CONCLUIR**.
-4. Clique na conta criada → aba **Chaves** → **ADICIONAR CHAVE** → **JSON**
-5. Abra o arquivo baixado no Bloco de Notas. Copie:
-   - `"client_email"`
-   - `"private_key"` (tudo, incluindo as linhas BEGIN/END)
+### Passo 3 — Service Account (acesso à planilha)
 
----
+**APIs e serviços** → **Credenciais** → **+ CRIAR CREDENCIAIS** → **Conta de serviço**
 
-## PASSO 4 — Criar a planilha
+1. Nome: `aiesec-shop-sheets`. **Criar e concluir**.
+2. Clique na conta → **Chaves** → **Adicionar chave** → **JSON**
+3. Abra o arquivo baixado. Copie `client_email` e `private_key`.
 
-1. Abra **[sheets.google.com](https://sheets.google.com)** → **+ Em branco**
-2. Nome: `AIESEC Shop - Produção`
-3. **Compartilhar** → cole o e-mail da Service Account → **Editor** → Enviar
-4. Copie o ID da planilha: da URL `.../d/`**`XXXXXXX`**`/edit`
+### Passo 4 — Planilha
 
----
+1. **[sheets.google.com](https://sheets.google.com)** → **+ Em branco**
+2. Nome: `AIESEC Shop`
+3. **Compartilhar** → cole o `client_email` → **Editor** → Enviar
+4. Copie o ID da URL: `.../d/XXXXXXX/edit`
 
-## PASSO 5 — Login Google (OAuth)
+### Passo 5 — Login Google (OAuth)
 
-1. Menu lateral: **APIs e serviços** → **Tela de consentimento OAuth**
-2. Tipo: **Externo** → **CRIAR**
-3. Preencha só os campos obrigatórios (nome, e-mail) → **SALVAR E CONTINUAR** até finalizar
-4. ⚠️ Após criar, clique em **PUBLICAR APP** (embaixo do nome do app). Se estiver como "Teste", adicione seu e-mail em **Test users**.
-5. Menu lateral: **Credenciais** → **+ CRIAR** → **ID do cliente OAuth**
-6. Tipo: **Aplicativo da Web**
-7. ⚠️ **Origens JavaScript autorizadas** — adicione:
-   - `http://localhost:5173`
-8. ⚠️ **URIs de redirecionamento autorizados** — adicione:
-   - `http://localhost:5173`
-9. **CRIAR** → copie o **ID do cliente**
----
+1. **APIs e serviços** → **Tela de consentimento OAuth**
+2. Tipo: **Externo** → Preencha nome e e-mail → **Publicar app**
+3. **Credenciais** → **+ Criar** → **ID do cliente OAuth**
+4. Tipo: **Aplicativo da Web**
+5. Origens autorizadas: `http://localhost:5173` e `https://oc-shop.pages.dev`
+6. URIs de redirecionamento: `http://localhost:5173` e `https://oc-shop.pages.dev`
+7. Copie o **ID do cliente**
 
-## PASSO 6 — Colar no wizard
+### Passo 6 — Deploy no Cloudflare
 
+1. Acesse **[dash.cloudflare.com](https://dash.cloudflare.com)** → **Workers & Pages**
+2. **Create** → **Pages** → **Connect to Git** → selecione o repositório
+3. Build command: `npm run build` | Output: `dist`
+4. **Save and Deploy**
+
+### Passo 7 — Configurar variáveis
+
+No Cloudflare Pages: **Settings** → **Environment variables**:
+
+| Variável | Valor |
+|---|---|
+| `GOOGLE_SERVICE_EMAIL` | `client_email` do JSON |
+| `GOOGLE_PRIVATE_KEY` | `private_key` do JSON (com `\n`) |
+| `SPREADSHEET_ID` | ID da planilha |
+| `VITE_OAUTH_CLIENT_ID` | ID do cliente OAuth |
+
+### Passo 8 — Configurar local
+
+Crie `.env` na raiz do projeto:
+
+```env
+VITE_API_URL=http://localhost:3001
+VITE_OAUTH_CLIENT_ID=SEU_CLIENT_ID
 ```
-Terminal 1: cd backend && npm run dev
-Terminal 2: npm run dev
+
+```bash
+cd backend && npm install && npm run dev   # Terminal 1
+npm run dev                                  # Terminal 2
 ```
 
-Acesse **`http://localhost:5173/admin/setup`**
-
-O wizard tem 5 passos. Preencha os campos e clique **Salvar** nos passos 2, 3 e 4.
+Acesse **http://localhost:5173**. Login com Google real.
 
 ---
 
-## ⚠️ DEPOIS DE SALVAR — FAÇA ISSO
+## Tecnologia
 
-O wizard salvou as credenciais mas elas só entram em vigor depois que você **reiniciar os dois servidores**:
-
-1. Pressione **Ctrl+C** no terminal do backend
-2. Pressione **Ctrl+C** no terminal do frontend
-3. Rode de novo:
-   ```
-   cd backend && npm run dev
-   npm run dev
-   ```
-4. Acesse `http://localhost:5173`
-5. Clique em **Entrar** — o login Google agora é REAL 🎉
-
-### Como saber se funcionou?
-
-- Se o banner no topo do wizard estava **🟢 verde**: login real ativo
-- Se você clicar "Entrar com Google" e aparecer o popup do Google pedindo sua conta → funcionou
-- Se ainda estiver no mock, verifique se `VITE_OAUTH_CLIENT_ID` aparece no arquivo `.env` da raiz do projeto
-
----
-
-## Resumo das credenciais
-
-| Credencial | Vem de | Vai para |
-|---|---|---|
-| Service Account E-mail | JSON baixado → `client_email` | Backend `.env` |
-| Service Account Chave | JSON baixado → `private_key` | Backend `.env` |
-| ID da Planilha | URL da planilha | Backend `.env` |
-| OAuth Client ID | Google Cloud → Credenciais | **Frontend `.env`** |
-| Drive Folder ID | URL da pasta no Drive | Backend `.env` |
+| Camada | O que usa |
+|---|---|
+| Frontend | React 19 + TypeScript + Tailwind CSS |
+| API | Cloudflare Functions (serverless) |
+| Banco | Google Sheets |
+| Auth | Google Identity Services |
+| Hospedagem | Cloudflare Pages (grátis) |

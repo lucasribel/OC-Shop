@@ -49,7 +49,7 @@ export default function Login() {
             <p className="mt-4 text-xs text-gray-400">Modo desenvolvimento — login mock</p>
           )}
 
-          {oauthReady && (
+          {oauthReady && error && (
             <div className="mt-4 p-3 rounded-lg bg-[#E8F4FE] border border-[#037EF3]/20 text-xs text-left text-gray-600">
               <p className="font-semibold mb-1">Se o login falhar com erro 403:</p>
               <p>1. Abra <a href="https://console.cloud.google.com/apis/credentials" target="_blank" className="underline text-[#037EF3]">console.cloud.google.com/apis/credentials</a></p>
