@@ -55,11 +55,11 @@ function parseRows(values, jsonFields) {
 }
 
 const H = {
-  C:['id','name','slug','aiesec','active','status','startDate','endDate','orderDeadline','ownerId','collaboratorIds'],
-  P:['id','conferenceId','name','description','price','stock','image','imageUrl','active','variants'],
-  O:['id','conferenceId','conferenceSlug','userId','userName','buyerName','buyerEmail','buyerPhone','items','total','status','createdAt'],
-  U:['id','email','name','picture','role','aiesec','googleId','conferenceIds'],
-  F:['mode','allowedAdminDomain','setupCompleted'],
+  Conferences:['id','name','slug','aiesec','active','status','startDate','endDate','orderDeadline','ownerId','collaboratorIds'],
+  Products:['id','conferenceId','name','description','price','stock','image','imageUrl','active','variants'],
+  Orders:['id','conferenceId','conferenceSlug','userId','userName','buyerName','buyerEmail','buyerPhone','items','total','status','createdAt'],
+  Users:['id','email','name','picture','role','aiesec','googleId','conferenceIds'],
+  Config:['mode','allowedAdminDomain','setupCompleted'],
 }
 
 export async function onRequest(ctx) {
