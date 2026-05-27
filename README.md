@@ -1,95 +1,132 @@
 # AIESEC Shop
 
-Loja de conferências da AIESEC Brasil. **Grátis. Sem servidor.** Roda 100% no Cloudflare Pages + Google Sheets.
+Loja de conferências da AIESEC Brasil. **100% serverless. Custo zero.**
 
 ---
 
-## 🚀 Deploy em 5 minutos
+## 🚀 Configuração Completa (15 minutos)
 
-### Você vai precisar de:
+Você vai precisar de: uma conta Google + [GitHub](https://github.com) + [Cloudflare](https://dash.cloudflare.com).
 
-- Uma conta Google (pessoal ou da sua AIESEC)
-- Conta gratuita no [Cloudflare](https://dash.cloudflare.com)
+---
 
-### Passo 1 — Criar projeto no Google Cloud
+## PASSO 1 — Google Cloud (5 min)
 
-1. Acesse **[console.cloud.google.com](https://console.cloud.google.com)**
-2. Clique no seletor de projeto no topo → **NOVO PROJETO**
-3. Nome: `AIESEC Shop` → **CRIAR**
+### 1.1 Criar projeto
+1. [console.cloud.google.com](https://console.cloud.google.com) → seletor no topo → **NOVO PROJETO**
+2. Nome: `AIESEC Shop` → **CRIAR**
 
-### Passo 2 — Ativar APIs
-
-Menu lateral: **APIs e serviços** → **Biblioteca**. Ative:
+### 1.2 Ativar APIs
+Menu lateral → **APIs e serviços** → **Biblioteca** → ative:
 - ✅ Google Sheets API
 - ✅ Google Drive API
 
-### Passo 3 — Service Account (acesso à planilha)
+### 1.3 Service Account (acesso às planilhas)
+1. **Credenciais** → **+ CRIAR** → **Conta de serviço**
+2. Nome: `aiesec-shop-sheets` → **CRIAR E CONCLUIR**
+3. Clique na conta → **Chaves** → **Adicionar chave** → **JSON**
+4. ⚠️ **Guarde o arquivo baixado.** Dele você vai precisar de:
+   - `client_email` → ex: `aiesec-shop-sheets@...iam.gserviceaccount.com`
+   - `private_key` → começa com `-----BEGIN PRIVATE KEY-----`
 
-**APIs e serviços** → **Credenciais** → **+ CRIAR CREDENCIAIS** → **Conta de serviço**
-
-1. Nome: `aiesec-shop-sheets`. **Criar e concluir**.
-2. Clique na conta → **Chaves** → **Adicionar chave** → **JSON**
-3. Abra o arquivo baixado. Copie `client_email` e `private_key`.
-
-### Passo 4 — Planilha
-
-1. **[sheets.google.com](https://sheets.google.com)** → **+ Em branco**
-2. Nome: `AIESEC Shop`
-3. **Compartilhar** → cole o `client_email` → **Editor** → Enviar
-4. Copie o ID da URL: `.../d/XXXXXXX/edit`
-
-### Passo 5 — Login Google (OAuth)
-
-1. **APIs e serviços** → **Tela de consentimento OAuth**
-2. Tipo: **Externo** → Preencha nome e e-mail → **Publicar app**
-3. **Credenciais** → **+ Criar** → **ID do cliente OAuth**
-4. Tipo: **Aplicativo da Web**
-5. Origens autorizadas: `http://localhost:5173` e `https://oc-shop.pages.dev`
-6. URIs de redirecionamento: `http://localhost:5173` e `https://oc-shop.pages.dev`
-7. Copie o **ID do cliente**
-
-### Passo 6 — Deploy no Cloudflare
-
-1. Acesse **[dash.cloudflare.com](https://dash.cloudflare.com)** → **Workers & Pages**
-2. **Create** → **Pages** → **Connect to Git** → selecione o repositório
-3. Build command: `npm run build` | Output: `dist`
-4. **Save and Deploy**
-
-### Passo 7 — Configurar variáveis
-
-No Cloudflare Pages: **Settings** → **Environment variables**:
-
-| Variável | Valor |
-|---|---|
-| `GOOGLE_SERVICE_EMAIL` | `client_email` do JSON |
-| `GOOGLE_PRIVATE_KEY` | `private_key` do JSON (com `\n`) |
-| `SPREADSHEET_ID` | ID da planilha |
-| `VITE_OAUTH_CLIENT_ID` | ID do cliente OAuth |
-
-### Passo 8 — Configurar local
-
-Crie `.env` na raiz do projeto:
-
-```env
-VITE_API_URL=http://localhost:3001
-VITE_OAUTH_CLIENT_ID=SEU_CLIENT_ID
-```
-
-```bash
-cd backend && npm install && npm run dev   # Terminal 1
-npm run dev                                  # Terminal 2
-```
-
-Acesse **http://localhost:5173**. Login com Google real.
+### 1.4 Login Google (OAuth)
+1. **Tela de consentimento OAuth** → **CRIAR** → tipo **Externo**
+2. Preencha nome `AIESEC Shop` + seu e-mail → **SALVAR E CONTINUAR**
+3. Clique **PUBLICAR APP** (em "Teste", adicione seu e-mail em Test users)
+4. **Credenciais** → **+ CRIAR** → **ID do cliente OAuth**
+5. Tipo: **Aplicativo da Web** → Nome: `AIESEC Shop`
+6. Origens autorizadas: `http://localhost:5173` e `https://oc-shop.pages.dev`
+7. URIs de redirecionamento: `http://localhost:5173` e `https://oc-shop.pages.dev`
+8. **CRIAR** → copie o **ID do cliente**
 
 ---
 
-## Tecnologia
+## PASSO 2 — Google Sheets (2 min)
 
-| Camada | O que usa |
+1. [sheets.google.com](https://sheets.google.com) → **+ Em branco**
+2. Nome: `AIESEC Shop`
+3. **Compartilhar** → cole o `client_email` da Service Account → **Editor** → Enviar
+4. Copie o ID da URL: `.../d/`**`XXXXXXX`**`/edit`
+
+---
+
+## PASSO 3 — Cloudflare (5 min)
+
+### 3.1 Deploy do frontend
+1. [dash.cloudflare.com](https://dash.cloudflare.com) → **Workers & Pages**
+2. **Create** → **Pages** → **Upload assets**
+3. Nome do projeto: `oc-shop`
+4. Arraste a pasta `dist/` (gere com `npm run build`)
+5. **Deploy**
+
+### 3.2 Configurar secrets
+No Cloudflare Pages → `oc-shop` → **Settings** → **Environment variables** → **Add secret**:
+
+| Nome | Valor |
 |---|---|
-| Frontend | React 19 + TypeScript + Tailwind CSS |
-| API | Cloudflare Functions (serverless) |
-| Banco | Google Sheets |
-| Auth | Google Identity Services |
-| Hospedagem | Cloudflare Pages (grátis) |
+| `GOOGLE_SERVICE_EMAIL` | `client_email` da Service Account |
+| `GOOGLE_PRIVATE_KEY` | `private_key` — cole EXATAMENTE como está no JSON, com as quebras de linha |
+| `SPREADSHEET_ID` | ID da planilha |
+| `VITE_OAUTH_CLIENT_ID` | ID do cliente OAuth |
+
+### 3.3 Redeploy
+Após salvar as secrets, volte em **Deployments** → **...** (3 pontinhos) → **Retry deployment**.
+
+---
+
+## PASSO 4 — Local (opcional, para desenvolvimento)
+
+```bash
+git clone https://github.com/lucasribel/OC-Shop
+cd OC-Shop
+npm install
+cd backend && npm install && cd ..
+
+# Crie .env na raiz:
+echo "VITE_API_URL=http://localhost:3001" > .env
+echo "VITE_OAUTH_CLIENT_ID=SEU_CLIENT_ID" >> .env
+
+# Backend
+cd backend
+echo "GOOGLE_SHEETS_CLIENT_EMAIL=..." > .env
+echo "GOOGLE_SHEETS_PRIVATE_KEY=..." >> .env
+echo "SPREADSHEET_ID=..." >> .env
+echo "PORT=3001" >> .env
+npm run dev
+
+# Frontend (outro terminal)
+npm run dev
+```
+
+---
+
+## ✅ Verificação
+
+1. **Health:** `curl https://oc-shop.pages.dev/api/health` → `{"status":"ok"}`
+2. **Conferências:** `curl https://oc-shop.pages.dev/api/conferences` → dados da planilha
+3. **Login:** acesse `https://oc-shop.pages.dev/login` → clique **Entrar com Google**
+
+---
+
+## 📁 Estrutura no Google Drive
+
+O sistema cria automaticamente:
+
+```
+📁 OC-Shop/    ← compartilhada com você
+├── 📁 _system/
+├── 📁 Conferences/
+│   ├── 📁 {slug}/
+│   │   └── 📁 images/   ← imagens dos produtos
+```
+
+---
+
+## 🔧 Resolução de problemas
+
+| Erro | Solução |
+|---|---|
+| 403 no login | Adicione `https://oc-shop.pages.dev` nas origens autorizadas do OAuth |
+| 500 na API | Verifique se as secrets do Cloudflare estão corretas |
+| "Tempo esgotado" | Permita popups para o site no navegador |
+| Pasta não aparece | Acesse "Partilhados comigo" no Google Drive |
