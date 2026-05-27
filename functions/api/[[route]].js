@@ -4,7 +4,7 @@
 async function getAccessToken(email, key) {
   const header = { alg: 'RS256', typ: 'JWT' }
   const now = Math.floor(Date.now() / 1000)
-  const claim = { iss: email, scope: 'https://www.googleapis.com/auth/spreadsheets', aud: 'https://oauth2.googleapis.com/token', exp: now + 3600, iat: now }
+  const claim = { iss: email, scope: 'https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/drive.file', aud: 'https://oauth2.googleapis.com/token', exp: now + 3600, iat: now }
   const jwt = await signJWT(header, claim, key)
   const res = await fetch('https://oauth2.googleapis.com/token', {
     method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -51,7 +51,6 @@ const SHEET_HEADERS = {
   Config:      ['mode','allowedAdminDomain','setupCompleted'],
 }
 
-const SHEET_MAP = { conferences: 'Conferences', products: 'Products', orders: 'Orders', users: 'Users', config: 'Config' }
 
 export async function onRequest(context) {
   const { request, env } = context
@@ -68,6 +67,20 @@ export async function onRequest(context) {
   try {
     const SID = env.SPREADSHEET_ID
     const token = await getAccessToken(env.GOOGLE_SERVICE_EMAIL, env.GOOGLE_PRIVATE_KEY)
+    async function findOrCreateFolder(name, parentId) {
+      const q = parentId
+        ? "'" + parentId + "' in parents and name='" + name + "' and mimeType='application/vnd.google-apps.folder' and trashed=false"
+        : "name='" + name + "' and mimeType='application/vnd.google-apps.folder' and trashed=false"
+      const list = await fetch('https://www.googleapis.com/drive/v3/files?q=' + encodeURIComponent(q) + '&fields=files(id,name)', { headers: { Authorization: 'Bearer ' + token } })
+      const data = await list.json()
+      if (data.files && data.files.length) return data.files[0].id
+      const create = await fetch('https://www.googleapis.com/drive/v3/files', {
+        method: 'POST', headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: name, mimeType: 'application/vnd.google-apps.folder', parents: parentId ? [parentId] : [] })
+      })
+      const folder = await create.json()
+      return folder.id
+    }
 
     async function sheetCall(sheet, method, range, body) {
       const url = `https://sheets.googleapis.com/v4/spreadsheets/${SID}/values/${encodeURIComponent(sheet)}!${range}`
@@ -108,6 +121,21 @@ export async function onRequest(context) {
     }
 
     function uuid() { return crypto.randomUUID() }
+
+    async function uploadToDrive(folderId, fileName, mimeType, buffer) {
+      const form = new FormData()
+      form.append('metadata', new Blob([JSON.stringify({ name: fileName, parents: [folderId] })], { type: 'application/json' }))
+      form.append('file', new Blob([buffer], { type: mimeType }))
+      const res = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,webContentLink', {
+        method: 'POST', headers: { Authorization: 'Bearer ' + token }, body: form
+      })
+      const file = await res.json()
+      await fetch('https://www.googleapis.com/drive/v3/files/' + file.id + '/permissions', {
+        method: 'POST', headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ role: 'reader', type: 'anyone' })
+      })
+      return { id: file.id, url: 'https://drive.google.com/uc?export=view&id=' + file.id }
+    }
 
     // ─── Health ─────────────────────
     if (path === 'health') return new Response(JSON.stringify({ status: 'ok' }), { headers: cors })
@@ -262,6 +290,43 @@ export async function onRequest(context) {
       if (rows.length) await updateRow('Config', 0, body)
       else await appendRow('Config', body)
       return new Response(JSON.stringify(body), { headers: cors })
+
+    // ─── Drive Setup ─────────────────
+    if (path === 'setup/drive' && method === 'POST') {
+      const rootId = await findOrCreateFolder(token, 'OC-Shop', null)
+      const systemId = await findOrCreateFolder(token, '_system', rootId)
+      const confsId = await findOrCreateFolder(token, 'Conferences', rootId)
+      return new Response(JSON.stringify({ rootId, systemId, confsId }), { headers: cors })
+    }
+
+    // ─── Image Upload ───────────────
+    if (path === 'upload/image' && method === 'POST') {
+      const formData = await request.formData()
+      const file = formData.get('image')
+      const conferenceSlug = formData.get('conferenceSlug')
+      if (!file || !conferenceSlug) return new Response(JSON.stringify({ error: 'image and conferenceSlug required' }), { status: 400, headers: cors })
+
+      const rootId = await findOrCreateFolder('OC-Shop', null)
+      const systemId = await findOrCreateFolder('_system', rootId)
+      const confsId = await findOrCreateFolder('Conferences', rootId)
+      return new Response(JSON.stringify({ rootId, systemId, confsId }), { headers: cors })
+    }
+
+    // ─── Image Upload ───────────────
+    if (path === 'upload/image' && method === 'POST') {
+      const formData = await request.formData()
+      const file = formData.get('image')
+      const conferenceSlug = formData.get('conferenceSlug')
+      if (!file || !conferenceSlug) return new Response(JSON.stringify({ error: 'image and conferenceSlug required' }), { status: 400, headers: cors })
+
+      const rootId = await findOrCreateFolder('OC-Shop', null)
+      const confsId = await findOrCreateFolder('Conferences', rootId)
+      const confFolderId = await findOrCreateFolder(conferenceSlug, confsId)
+      const imagesId = await findOrCreateFolder('images', confFolderId)
+
+      const buffer = await file.arrayBuffer()
+      const result = await uploadToDrive(imagesId, file.name, file.type, buffer)
+      return new Response(JSON.stringify(result), { status: 201, headers: cors })
     }
 
     return new Response(JSON.stringify({ error: `Route not found: ${method} /api/${path}` }), { status: 404, headers: cors })
