@@ -11,7 +11,7 @@ function generateSlug(name: string): string {
 }
 
 function NewConferenceModal({ open, onClose, onCreated }: {
-  open: boolean; onClose: () => void; onCreated: (slug: string) => void
+  open: boolean; onClose: () => void; onCreated: (conf: Conference) => void
 }) {
   const user = useAuthStore((s) => s.user)
   const [name, setName] = useState('')
@@ -37,7 +37,7 @@ function NewConferenceModal({ open, onClose, onCreated }: {
     setSaving(true); setError(null)
     try {
       const conf = await api.conferences.create({ name: name.trim(), slug: slug.trim(), aiesec: user.aiesec ?? '', active: status === 'open', status, startDate, endDate, orderDeadline, ownerId: user.id, collaboratorIds: [] })
-      onCreated(conf.slug); onClose()
+      onCreated(conf); onClose()
     } catch (err) { setError(err instanceof Error ? err.message : 'Erro ao criar conferência') } finally { setSaving(false) }
   }
 
@@ -216,7 +216,7 @@ export default function ConferenceSelect() {
         )}
       </main>
 
-      <NewConferenceModal open={modalOpen} onClose={() => setModalOpen(false)} onCreated={(slug) => setTimeout(() => navigate(`/admin/${slug}/dashboard`), 1000)} />
+      <NewConferenceModal open={modalOpen} onClose={() => setModalOpen(false)} onCreated={(conf) => navigate(`/admin/${conf.slug}/dashboard`, { state: { conference: conf } })} />
     </div>
   )
 }
