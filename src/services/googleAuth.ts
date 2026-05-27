@@ -1,6 +1,6 @@
 /**
  * Google OAuth 2.0 — Implicit Flow direto.
- * Popup → Google → redirect → sessionStorage → parent processa token.
+ * Popup → Google → redirect → localStorage → parent processa token.
  */
 import { api } from './api'
 
@@ -34,7 +34,7 @@ export function triggerGoogleLogin() {
 
   const redirectUri = window.location.origin
   const state = Math.random().toString(36).substring(2)
-  sessionStorage.setItem('oauth_state', state)
+  localStorage.setItem('oauth_state', state)
 
   const authUrl = new URL('https://accounts.google.com/o/oauth2/v2/auth')
   authUrl.searchParams.set('client_id', CLIENT_ID)
@@ -53,15 +53,15 @@ export function triggerGoogleLogin() {
     return
   }
 
-  // Poll: verifica sessionStorage a cada 300ms
+  // Poll: verifica localStorage a cada 300ms
   const poll = setInterval(async () => {
-    const tokenData = sessionStorage.getItem('oauth_token')
-    const tokenState = sessionStorage.getItem('oauth_token_state')
+    const tokenData = localStorage.getItem('oauth_token')
+    const tokenState = localStorage.getItem('oauth_token_state')
     if (tokenData && tokenState === state) {
       clearInterval(poll)
-      sessionStorage.removeItem('oauth_token')
-      sessionStorage.removeItem('oauth_token_state')
-      sessionStorage.removeItem('oauth_state')
+      localStorage.removeItem('oauth_token')
+      localStorage.removeItem('oauth_token_state')
+      localStorage.removeItem('oauth_state')
       try { await handleToken(tokenData) }
       catch (e: any) { window.dispatchEvent(new CustomEvent('ocshop:login-error', { detail: e.message })) }
     }
@@ -70,7 +70,7 @@ export function triggerGoogleLogin() {
   // Timeout de 60s — para de tentar
   setTimeout(() => {
     clearInterval(poll)
-    if (!sessionStorage.getItem('oauth_token')) {
+    if (!localStorage.getItem('oauth_token')) {
       window.dispatchEvent(new CustomEvent('ocshop:login-error', { detail: 'Tempo esgotado. Tente novamente.' }))
     }
   }, 60000)
@@ -86,9 +86,9 @@ export function handleOAuthRedirect() {
   const state = params.get('state')
 
   if (accessToken && state) {
-    // Salva no sessionStorage — a página principal (opener) vai ler
-    sessionStorage.setItem('oauth_token', accessToken)
-    sessionStorage.setItem('oauth_token_state', state)
+    // Salva no localStorage — a página principal (opener) vai ler
+    localStorage.setItem('oauth_token', accessToken)
+    localStorage.setItem('oauth_token_state', state)
 
     // Tenta postMessage (se opener ainda existe)
     if (window.opener) {
