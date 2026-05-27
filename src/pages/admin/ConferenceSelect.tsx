@@ -216,7 +216,7 @@ export default function ConferenceSelect() {
         )}
       </main>
 
-      <NewConferenceModal open={modalOpen} onClose={() => setModalOpen(false)} onCreated={(slug) => navigate(`/admin/${slug}/dashboard`)} />
+      <NewConferenceModal open={modalOpen} onClose={() => setModalOpen(false)} onCreated={(slug) => setTimeout(() => navigate(`/admin/${slug}/dashboard`), 1000)} />
     </div>
   )
 }

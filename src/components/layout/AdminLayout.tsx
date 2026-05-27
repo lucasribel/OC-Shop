@@ -38,7 +38,15 @@ export function AdminLayout({ children }: AdminLayoutProps) {
     }
     api.conferences.getBySlug(slug).then((conf) => {
       if (!conf) {
-        navigate('/admin', { replace: true })
+        // Retry after 1s — Sheets pode não ter propagado ainda
+        setTimeout(() => {
+          api.conferences.getBySlug(slug).then((retry) => {
+            if (!retry) { navigate('/admin', { replace: true }); return }
+            if (!hasConferenceAccess(retry.id)) { navigate('/admin', { replace: true }); return }
+            setConference(retry)
+            setLoading(false)
+          })
+        }, 1000)
         return
       }
       if (!hasConferenceAccess(conf.id)) {
