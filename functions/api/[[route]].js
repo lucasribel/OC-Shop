@@ -43,18 +43,15 @@ function parseRows(values, jsonFields = []) {
   })
 }
 
-function rowToArray(headers, data) {
-  return headers.map(h => {
-    const v = data[h]
-    if (v === undefined || v === null) return ''
-    if (typeof v === 'object') return JSON.stringify(v)
-    return String(v)
-  })
+const SHEET_HEADERS = {
+  Conferences: ['id','name','slug','aiesec','active','status','startDate','endDate','orderDeadline','ownerId','collaboratorIds'],
+  Products:    ['id','conferenceId','name','description','price','stock','image','imageUrl','active','variants'],
+  Orders:      ['id','conferenceId','conferenceSlug','userId','userName','buyerName','buyerEmail','buyerPhone','items','total','status','createdAt'],
+  Users:       ['id','email','name','picture','role','aiesec','googleId','conferenceIds'],
+  Config:      ['mode','allowedAdminDomain','setupCompleted'],
 }
 
-function uuid() { return crypto.randomUUID() }
-
-const SHEETS = { conferences: 'Conferences', products: 'Products', orders: 'Orders', users: 'Users', config: 'Config' }
+const SHEET_MAP = { conferences: 'Conferences', products: 'Products', orders: 'Orders', users: 'Users', config: 'Config' }
 
 export async function onRequest(context) {
   const { request, env } = context
@@ -72,29 +69,34 @@ export async function onRequest(context) {
     const SID = env.SPREADSHEET_ID
     const token = await getAccessToken(env.GOOGLE_SERVICE_EMAIL, env.GOOGLE_PRIVATE_KEY)
 
-    async function read(sheet) {
-      const r = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SID}/values/${encodeURIComponent(sheet)}!A:Z`, { headers: { Authorization: `Bearer ${token}` } })
-      if (!r.ok) return { values: [] }
+    async function sheetCall(sheet, method, range, body) {
+      const url = `https://sheets.googleapis.com/v4/spreadsheets/${SID}/values/${encodeURIComponent(sheet)}!${range}`
+      const opts = { method, headers: { Authorization: `Bearer ${token}` } }
+      if (body) { opts.headers['Content-Type'] = 'application/json'; opts.body = JSON.stringify(body) }
+      const r = await fetch(url, opts)
+      if (!r.ok) throw new Error(`Sheets API ${method} ${range}: ${r.status}`)
+      if (r.status === 204) return null
       return r.json()
     }
 
-    async function append(sheet, data) {
-      const headers = Object.keys(data)
-      await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SID}/values/${encodeURIComponent(sheet)}!A1:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS`, {
-        method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ values: [rowToArray(headers, data)] })
-      })
+    async function readSheet(sheet) {
+      try { return await sheetCall(sheet, 'GET', 'A:Z') }
+      catch { return { values: [] } }
     }
 
-    async function updateRows(sheet, rowIndex, data) {
-      const headers = Object.keys(data)
-      await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SID}/values/${encodeURIComponent(sheet)}!A${rowIndex + 2}?valueInputOption=RAW`, {
-        method: 'PUT', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ values: [rowToArray(headers, data)] })
-      })
+    async function appendRow(sheet, data) {
+      const headers = SHEET_HEADERS[sheet] || Object.keys(data)
+      const values = headers.map(h => data[h] !== undefined ? String(data[h]) : '')
+      await sheetCall(sheet, 'POST', 'A1:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS', { values: [values] })
     }
 
-    async function deleteRow(sheet, rowIndex) {
+    async function updateRow(sheet, rowIndex, data) {
+      const headers = SHEET_HEADERS[sheet] || Object.keys(data)
+      const values = headers.map(h => data[h] !== undefined ? String(data[h]) : '')
+      await sheetCall(sheet, 'PUT', `A${rowIndex + 2}?valueInputOption=RAW`, { values: [values] })
+    }
+
+    async function deleteSheetRow(sheet, rowIndex) {
       const meta = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SID}`, { headers: { Authorization: `Bearer ${token}` } })
       const m = await meta.json()
       const sh = m.sheets.find(s => s.properties.title === sheet)
@@ -105,34 +107,36 @@ export async function onRequest(context) {
       })
     }
 
+    function uuid() { return crypto.randomUUID() }
+
     // ─── Health ─────────────────────
     if (path === 'health') return new Response(JSON.stringify({ status: 'ok' }), { headers: cors })
 
     // ─── Conferences ────────────────
     if (path === 'conferences' && method === 'GET') {
-      const data = await read(SHEETS.conferences)
+      const data = await readSheet('Conferences')
       return new Response(JSON.stringify(parseRows(data.values, ['collaboratorIds'])), { headers: cors })
     }
     if (path === 'conferences' && method === 'POST') {
       const body = await request.json()
-      const record = { ...body, id: body.id || uuid() }
-      await append(SHEETS.conferences, record)
-      return new Response(JSON.stringify(record), { status: 201, headers: cors })
+      body.id = body.id || uuid()
+      await appendRow('Conferences', body)
+      return new Response(JSON.stringify(body), { status: 201, headers: cors })
     }
     if (path.match(/^conferences\/[^/]+$/) && method === 'PUT') {
       const id = path.split('/')[1]
       const body = await request.json()
-      const data = await read(SHEETS.conferences)
+      const data = await readSheet('Conferences')
       const rows = parseRows(data.values, ['collaboratorIds'])
       const idx = rows.findIndex(r => r.id === id)
       if (idx === -1) return new Response(JSON.stringify({ error: 'Not found' }), { status: 404, headers: cors })
       const updated = { ...rows[idx], ...body }
-      await updateRows(SHEETS.conferences, idx, updated)
+      await updateRow('Conferences', idx, updated)
       return new Response(JSON.stringify(updated), { headers: cors })
     }
     if (path.startsWith('conferences/slug/') && method === 'GET') {
       const slug = path.split('/').pop()
-      const data = await read(SHEETS.conferences)
+      const data = await readSheet('Conferences')
       const items = parseRows(data.values, ['collaboratorIds'])
       return new Response(JSON.stringify(items.find(c => c.slug === slug) || null), { headers: cors })
     }
@@ -140,75 +144,77 @@ export async function onRequest(context) {
     // ─── Products ───────────────────
     if (path === 'products' && method === 'GET') {
       const cid = url.searchParams.get('conferenceId')
-      const data = await read(SHEETS.products)
+      const data = await readSheet('Products')
       let items = parseRows(data.values, ['variants'])
       if (cid) items = items.filter(p => p.conferenceId === cid)
       return new Response(JSON.stringify(items), { headers: cors })
     }
     if (path === 'products' && method === 'POST') {
       const body = await request.json()
-      const record = { ...body, id: body.id || uuid(), active: true }
-      await append(SHEETS.products, record)
-      return new Response(JSON.stringify(record), { status: 201, headers: cors })
+      body.id = body.id || uuid()
+      await appendRow('Products', body)
+      return new Response(JSON.stringify(body), { status: 201, headers: cors })
     }
     if (path.match(/^products\/[^/]+$/) && method === 'PUT') {
       const id = path.split('/')[1]
       const body = await request.json()
-      const data = await read(SHEETS.products)
+      const data = await readSheet('Products')
       const rows = parseRows(data.values, ['variants'])
       const idx = rows.findIndex(r => r.id === id)
       if (idx === -1) return new Response(JSON.stringify({ error: 'Not found' }), { status: 404, headers: cors })
       const updated = { ...rows[idx], ...body }
-      await updateRows(SHEETS.products, idx, updated)
+      await updateRow('Products', idx, updated)
       return new Response(JSON.stringify(updated), { headers: cors })
     }
     if (path.match(/^products\/[^/]+$/) && method === 'DELETE') {
       const id = path.split('/')[1]
-      const data = await read(SHEETS.products)
+      const data = await readSheet('Products')
       const rows = parseRows(data.values, ['variants'])
       const idx = rows.findIndex(r => r.id === id)
       if (idx === -1) return new Response(JSON.stringify({ error: 'Not found' }), { status: 404, headers: cors })
-      await deleteRow(SHEETS.products, idx)
+      await deleteSheetRow('Products', idx)
       return new Response(null, { status: 204, headers: cors })
     }
 
     // ─── Orders ─────────────────────
     if (path === 'orders' && method === 'GET') {
       const cid = url.searchParams.get('conferenceId')
-      const data = await read(SHEETS.orders)
+      const data = await readSheet('Orders')
       let items = parseRows(data.values, ['items'])
       if (cid) items = items.filter(o => o.conferenceId === cid)
       return new Response(JSON.stringify(items), { headers: cors })
     }
     if (path === 'orders' && method === 'POST') {
       const body = await request.json()
-      const record = { ...body, id: body.id || uuid(), createdAt: body.createdAt || new Date().toISOString(), status: body.status || 'pending' }
-      await append(SHEETS.orders, record)
-      return new Response(JSON.stringify(record), { status: 201, headers: cors })
+      body.id = body.id || uuid()
+      body.createdAt = body.createdAt || new Date().toISOString()
+      body.status = body.status || 'pending'
+      await appendRow('Orders', body)
+      return new Response(JSON.stringify(body), { status: 201, headers: cors })
     }
     if (path.match(/^orders\/[^/]+$/) && method === 'PUT') {
       const id = path.split('/')[1]
       const body = await request.json()
-      const data = await read(SHEETS.orders)
+      const data = await readSheet('Orders')
       const rows = parseRows(data.values, ['items'])
       const idx = rows.findIndex(r => r.id === id)
       if (idx === -1) return new Response(JSON.stringify({ error: 'Not found' }), { status: 404, headers: cors })
       const updated = { ...rows[idx], ...body }
-      await updateRows(SHEETS.orders, idx, updated)
+      await updateRow('Orders', idx, updated)
       return new Response(JSON.stringify(updated), { headers: cors })
     }
     if (path.match(/^orders\/[^/]+$/) && method === 'DELETE') {
       const id = path.split('/')[1]
-      const data = await read(SHEETS.orders)
+      const data = await readSheet('Orders')
       const rows = parseRows(data.values, ['items'])
       const idx = rows.findIndex(r => r.id === id)
       if (idx === -1) return new Response(JSON.stringify({ error: 'Not found' }), { status: 404, headers: cors })
-      await deleteRow(SHEETS.orders, idx)
+      await deleteSheetRow('Orders', idx)
       return new Response(null, { status: 204, headers: cors })
     }
     if (path.startsWith('orders/buyer') && method === 'GET') {
       const email = url.searchParams.get('email')
-      const data = await read(SHEETS.orders)
+      const data = await readSheet('Orders')
       let items = parseRows(data.values, ['items'])
       if (email) items = items.filter(o => o.buyerEmail === email)
       return new Response(JSON.stringify(items), { headers: cors })
@@ -216,45 +222,45 @@ export async function onRequest(context) {
 
     // ─── Users ──────────────────────
     if (path === 'users' && method === 'GET') {
-      const data = await read(SHEETS.users)
+      const data = await readSheet('Users')
       return new Response(JSON.stringify(parseRows(data.values, ['conferenceIds'])), { headers: cors })
     }
     if (path === 'users' && method === 'POST') {
       const body = await request.json()
-      const record = { ...body, id: body.id || uuid() }
-      await append(SHEETS.users, record)
-      return new Response(JSON.stringify(record), { status: 201, headers: cors })
+      body.id = body.id || uuid()
+      await appendRow('Users', body)
+      return new Response(JSON.stringify(body), { status: 201, headers: cors })
     }
     if (path.match(/^users\/[^/]+$/) && method === 'PUT') {
       const id = path.split('/')[1]
       const body = await request.json()
-      const data = await read(SHEETS.users)
+      const data = await readSheet('Users')
       const rows = parseRows(data.values, ['conferenceIds'])
       const idx = rows.findIndex(r => r.id === id)
       if (idx === -1) return new Response(JSON.stringify({ error: 'Not found' }), { status: 404, headers: cors })
       const updated = { ...rows[idx], ...body }
-      await updateRows(SHEETS.users, idx, updated)
+      await updateRow('Users', idx, updated)
       return new Response(JSON.stringify(updated), { headers: cors })
     }
     if (path.startsWith('users/email/') && method === 'GET') {
       const em = decodeURIComponent(path.replace('users/email/', ''))
-      const data = await read(SHEETS.users)
+      const data = await readSheet('Users')
       const items = parseRows(data.values, ['conferenceIds'])
       return new Response(JSON.stringify(items.find(u => u.email === em) || null), { headers: cors })
     }
 
     // ─── Config ─────────────────────
     if (path === 'config' && method === 'GET') {
-      const data = await read(SHEETS.config)
+      const data = await readSheet('Config')
       const items = parseRows(data.values, [])
       return new Response(JSON.stringify(items[0] || { mode: 'closed', allowedAdminDomain: null, setupCompleted: false }), { headers: cors })
     }
     if (path === 'config' && method === 'PUT') {
       const body = await request.json()
-      const data = await read(SHEETS.config)
+      const data = await readSheet('Config')
       const rows = parseRows(data.values, [])
-      if (rows.length) await updateRows(SHEETS.config, 0, body)
-      else await append(SHEETS.config, body)
+      if (rows.length) await updateRow('Config', 0, body)
+      else await appendRow('Config', body)
       return new Response(JSON.stringify(body), { headers: cors })
     }
 
