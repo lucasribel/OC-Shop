@@ -23,12 +23,19 @@ async function accessToken(email, key) {
 async function signJWT(header, claim, key) {
   const enc = new TextEncoder()
   const input = enc.encode(b64(header)+'.'+b64(claim))
-  // key pode vir limpa (puro base64) ou com marcadores e quebras
-  const pem = key.replace(/-----[^-]+-----/g, '').replace(/\s/g, '').replace(/\\n/g, '')
+  // key pode vir em base64 (btoa do PEM) ou como texto puro
+  let pem = key
+  // Tenta decodificar base64 se não contém BEGIN/END
+  if (!pem.includes('BEGIN')) {
+    try { pem = atob(pem) } catch {}
+  }
+  pem = pem.replace(/-----[^-]+-----/g, '').replace(/\s/g, '').replace(/\\n/g, '')
   const bin = Uint8Array.from([...atob(pem)].map(c=>c.charCodeAt(0)))
   const ck = await crypto.subtle.importKey('pkcs8',bin,{name:'RSASSA-PKCS1-v1_5',hash:'SHA-256'},false,['sign'])
   const sig = await crypto.subtle.sign('RSASSA-PKCS1-v1_5',ck,input)
-  return b64(header)+'.'+b64(claim)+'.'+b64(String.fromCharCode(...new Uint8Array(sig)))
+  const sigRaw = String.fromCharCode(...new Uint8Array(sig))
+  const sigB64 = btoa(sigRaw).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'')
+  return b64(header)+'.'+b64(claim)+'.'+sigB64
 }
 
 function parseRows(values, jsonFields) {
@@ -97,8 +104,18 @@ export async function onRequest(ctx) {
       })
     }
 
-    // ─── Health
-    if(p==='health') return new Response(JSON.stringify({status:'ok'}),{headers:cors})
+    // ─── Health (com diagnóstico)
+    if(p==='health'){
+      try {
+        const testHeader={alg:'RS256',typ:'JWT'}
+        const now=Math.floor(Date.now()/1000)
+        const testClaim={iss:env.GOOGLE_SERVICE_EMAIL,scope:'test',aud:'test',exp:now+60,iat:now}
+        const testJwt=await signJWT(testHeader,testClaim,env.GOOGLE_PRIVATE_KEY)
+        return new Response(JSON.stringify({status:'ok',jwt_ok:!!testJwt,key_len:env.GOOGLE_PRIVATE_KEY.length,key_start:env.GOOGLE_PRIVATE_KEY.substring(0,40)}),{headers:cors})
+      }catch(e){
+        return new Response(JSON.stringify({status:'error',msg:e.message}),{headers:cors})
+      }
+    }
 
     // ─── Conferences
     if(p==='conferences'&&m==='GET'){const d=await read('Conferences');return new Response(JSON.stringify(parseRows(d.values,['collaboratorIds'])),{headers:cors})}
