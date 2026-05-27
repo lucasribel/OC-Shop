@@ -2,6 +2,33 @@ import { useState, useRef } from 'react'
 import { Button } from './Button'
 import { getApiUrl } from '@/config/api'
 
+
+async function compressImage(file: File, maxDim: number, quality: number): Promise<Blob> {
+  return new Promise((resolve, reject) => {
+    const img = new Image()
+    const url = URL.createObjectURL(file)
+    img.onload = () => {
+      URL.revokeObjectURL(url)
+      let { width, height } = img
+      if (width > maxDim || height > maxDim) {
+        const ratio = Math.min(maxDim / width, maxDim / height)
+        width = Math.round(width * ratio)
+        height = Math.round(height * ratio)
+      }
+      const canvas = document.createElement('canvas')
+      canvas.width = width
+      canvas.height = height
+      const ctx = canvas.getContext('2d')!
+      ctx.drawImage(img, 0, 0, width, height)
+      canvas.toBlob((blob) => {
+        if (blob) resolve(blob)
+        else reject(new Error('Falha ao comprimir imagem'))
+      }, 'image/jpeg', quality)
+    }
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Falha ao carregar imagem')) }
+    img.src = url
+  })
+}
 interface ImageUploadProps {
   currentUrl?: string
   onUpload(url: string): void
@@ -39,8 +66,11 @@ export default function ImageUpload({
     setUploading(true)
 
     try {
+      // Comprime imagem para data URL caber em célula do Sheets (<50KB)
+      const compressed = await compressImage(file, 300, 0.6)
+
       const formData = new FormData()
-      formData.append('image', file)
+      formData.append('image', compressed, file.name.replace(/\.[^.]+$/, '.jpg'))
       formData.append('conferenceSlug', conferenceSlug)
 
       const endpoint =
