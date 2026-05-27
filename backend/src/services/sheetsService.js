@@ -60,7 +60,45 @@ async function ensureTabs() {
 }
 
 // Executa na inicialização
-ensureTabs()
+
+// Popula planilha vazia com dados mock (roda só na primeira vez)
+async function seedIfEmpty() {
+  if (!SHEETS_ENABLED) return
+  try {
+    // Verifica se Conferences está vazia
+    const existing = await readRows(SHEET_NAMES.conferences)
+    if (existing.length > 0) return // já tem dados
+
+    console.log('[sheetsService] Planilha vazia — populando com dados mock...')
+    const db = getMock()
+
+    // Seed conferences
+    for (const c of db.conferences) {
+      await appendRow(SHEET_NAMES.conferences, HEADERS.conferences, c)
+    }
+    // Seed products
+    for (const p of db.products) {
+      await appendRow(SHEET_NAMES.products, HEADERS.products, p)
+    }
+    // Seed orders
+    for (const o of db.orders) {
+      await appendRow(SHEET_NAMES.orders, HEADERS.orders, o)
+    }
+    // Seed users
+    for (const u of db.users) {
+      await appendRow(SHEET_NAMES.users, HEADERS.users, u)
+    }
+    // Seed config
+    await appendRow(SHEET_NAMES.config, HEADERS.config, db.config)
+
+    console.log('[sheetsService] Dados mock populados na planilha!')
+  } catch (err) {
+    console.warn('[sheetsService] Erro ao popular planilha:', err.message)
+  }
+}
+
+// Executa após criar as abas
+ensureTabs().then(() => seedIfEmpty())
 
 // ─── Read ─────────────────────────────────
 async function readRows(sheetName) {
