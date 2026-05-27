@@ -19,7 +19,7 @@ declare global {
 const CLIENT_ID = (import.meta.env.VITE_OAUTH_CLIENT_ID as string) || ''
 
 let initialized = false
-let initializing = false
+let initPromise: Promise<void> | null = null
 
 function decodeJwt(token: string): Record<string, any> | null {
   try {
@@ -46,31 +46,41 @@ async function handleCredentialResponse(response: { credential: string }) {
   }
 }
 
-export function initGoogleAuth() {
-  if (!CLIENT_ID) return
-  if (initialized || initializing) return
-  initializing = true
-
-  const interval = setInterval(() => {
-    if (window.google?.accounts) {
-      clearInterval(interval)
-      window.google.accounts.id.initialize({ client_id: CLIENT_ID, callback: handleCredentialResponse })
-      initialized = true
-      initializing = false
-    }
-  }, 200)
-
-  // Timeout após 10 segundos
-  setTimeout(() => {
-    clearInterval(interval)
-    initializing = false
-  }, 10000)
+function waitForGoogle(): Promise<void> {
+  if (window.google?.accounts) return Promise.resolve()
+  return new Promise((resolve, reject) => {
+    let attempts = 0
+    const interval = setInterval(() => {
+      if (window.google?.accounts) {
+        clearInterval(interval)
+        resolve()
+      } else if (++attempts > 50) {
+        clearInterval(interval)
+        reject(new Error('Google Identity Services não carregou'))
+      }
+    }, 200)
+  })
 }
 
-export function triggerGoogleLogin() {
+export async function initGoogleAuth(): Promise<void> {
   if (!CLIENT_ID) return
-  if (!window.google?.accounts) return
-  window.google.accounts.id.prompt()
+  if (initialized) return
+  if (initPromise) return initPromise
+
+  initPromise = (async () => {
+    await waitForGoogle()
+    window.google!.accounts.id.initialize({ client_id: CLIENT_ID, callback: handleCredentialResponse })
+    initialized = true
+    console.log('[GoogleAuth] Inicializado com client_id:', CLIENT_ID.substring(0, 20) + '...')
+  })()
+
+  await initPromise
+}
+
+export async function triggerGoogleLogin() {
+  if (!CLIENT_ID) return
+  await initGoogleAuth()
+  window.google?.accounts.id.prompt()
 }
 
 export function isGoogleAuthConfigured(): boolean {
