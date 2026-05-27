@@ -220,6 +220,20 @@ export async function onRequest(ctx) {
       return new Response(JSON.stringify({rootId:rid,systemId:sid,conferencesId:cid}),{headers:cors})
     }
 
+    // ─── Upload (converte para data URL, armazenamento sem Drive)
+    if(p.startsWith('upload/')&&m==='POST'){
+      const form=await req.formData()
+      const file=form.get('image')
+      if(!file||typeof file==='string')return new Response(JSON.stringify({error:'No image file'}),{status:400,headers:cors})
+      const bytes=await file.arrayBuffer()
+      const arr=new Uint8Array(bytes)
+      let b64=''
+      const CHUNK=0x8000;for(let i=0;i<arr.length;i+=CHUNK)b64+=String.fromCharCode.apply(null,arr.subarray(i,i+CHUNK))
+      b64=btoa(b64)
+      const url='data:'+(file.type||'image/png')+';base64,'+b64
+      return new Response(JSON.stringify({url}),{headers:cors})
+    }
+
     return new Response(JSON.stringify({error:'Route not found: '+m+' /api/'+p}),{status:404,headers:cors})
   }catch(err){return new Response(JSON.stringify({error:err.message}),{status:500,headers:cors})}
 }
