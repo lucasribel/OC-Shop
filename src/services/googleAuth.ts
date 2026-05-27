@@ -1,7 +1,6 @@
 /**
  * Google OAuth 2.0 — Implicit Flow direto.
- * Sem GIS, sem One Tap, sem renderButton.
- * Abre popup para accounts.google.com/o/oauth2/v2/auth
+ * Popup → Google → redirect → sessionStorage → parent processa token.
  */
 import { api } from './api'
 
@@ -15,115 +14,87 @@ function decodeJwt(token: string): Record<string, any> | null {
   } catch { return null }
 }
 
-async function handleToken(accessToken: string, idToken?: string) {
-  try {
-    // Pega dados do usuário via Google API
-    const res = await fetch(`https://www.googleapis.com/oauth2/v3/userinfo?access_token=${accessToken}`)
-    const profile = await res.json()
-    if (!profile.email) throw new Error('Não foi possível obter perfil')
+async function handleToken(accessToken: string) {
+  const res = await fetch(`https://www.googleapis.com/oauth2/v3/userinfo?access_token=${accessToken}`)
+  const profile = await res.json()
+  if (!profile.email) throw new Error('Não foi possível obter perfil')
 
-    const { email, name, picture, sub: googleId } = profile
-    let user = await api.users.getByEmail(email)
-    if (!user) user = await api.users.create({ email, name, picture, role: 'user', googleId, conferenceIds: [] })
-    else if (!user.googleId) await api.users.update(user.id, { googleId, picture: picture || user.picture })
+  const { email, name, picture, sub: googleId } = profile
+  let user = await api.users.getByEmail(email)
+  if (!user) user = await api.users.create({ email, name, picture, role: 'user', googleId, conferenceIds: [] })
+  else if (!user.googleId) await api.users.update(user.id, { googleId, picture: picture || user.picture })
 
-    const { useAuthStore } = await import('@/store/useAuthStore')
-    useAuthStore.getState().setUser(user)
-    window.dispatchEvent(new CustomEvent('ocshop:login', { detail: user }))
-  } catch (err: any) {
-    window.dispatchEvent(new CustomEvent('ocshop:login-error', { detail: String(err.message || err) }))
-  }
+  const { useAuthStore } = await import('@/store/useAuthStore')
+  useAuthStore.getState().setUser(user)
+  window.dispatchEvent(new CustomEvent('ocshop:login', { detail: user }))
 }
 
 export function triggerGoogleLogin() {
   if (!CLIENT_ID) return
 
   const redirectUri = window.location.origin
-  const scope = 'email profile openid'
   const state = Math.random().toString(36).substring(2)
-
-  // Armazena state para verificar no callback
   sessionStorage.setItem('oauth_state', state)
 
   const authUrl = new URL('https://accounts.google.com/o/oauth2/v2/auth')
   authUrl.searchParams.set('client_id', CLIENT_ID)
   authUrl.searchParams.set('redirect_uri', redirectUri)
-  authUrl.searchParams.set('response_type', 'token id_token')
-  authUrl.searchParams.set('scope', scope)
+  authUrl.searchParams.set('response_type', 'token')
+  authUrl.searchParams.set('scope', 'email profile')
   authUrl.searchParams.set('state', state)
-  authUrl.searchParams.set('nonce', Math.random().toString(36).substring(2))
   authUrl.searchParams.set('include_granted_scopes', 'true')
 
-  // Handler para o callback via postMessage ou redirect
-  const handleMessage = (e: MessageEvent) => {
-    if (e.origin !== window.location.origin) return
-    if (e.data?.type === 'oauth_callback') {
-      window.removeEventListener('message', handleMessage)
-      const hash = e.data.hash
-      const params = new URLSearchParams(hash.replace('#', ''))
-      const accessToken = params.get('access_token')
-      const idToken = params.get('id_token')
-      const returnedState = params.get('state')
-      const error = params.get('error')
-
-      if (error) {
-        window.dispatchEvent(new CustomEvent('ocshop:login-error', { detail: error }))
-        return
-      }
-      if (returnedState !== sessionStorage.getItem('oauth_state')) {
-        window.dispatchEvent(new CustomEvent('ocshop:login-error', { detail: 'State mismatch' }))
-        return
-      }
-      if (accessToken) handleToken(accessToken, idToken || undefined)
-    }
-  }
-  window.addEventListener('message', handleMessage, { once: false })
-
-  // Abre popup
   const w = 500, h = 600
-  const left = (screen.width - w) / 2
-  const top = (screen.height - h) / 2
-  const popup = window.open(
-    authUrl.toString(),
-    'google-signin',
-    `width=${w},height=${h},left=${left},top=${top}`
-  )
+  const popup = window.open(authUrl.toString(), 'google-signin',
+    `width=${w},height=${h},left=${(screen.width-w)/2},top=${(screen.height-h)/2}`)
 
   if (!popup) {
-    window.dispatchEvent(new CustomEvent('ocshop:login-error', { detail: 'Popup bloqueado. Permita popups para este site.' }))
+    window.dispatchEvent(new CustomEvent('ocshop:login-error', { detail: 'Popup bloqueado. Permita popups.' }))
     return
   }
 
-  // Poll para detectar quando o popup fecha
-  const pollTimer = setInterval(() => {
-    if (popup.closed) {
-      clearInterval(pollTimer)
-      window.removeEventListener('message', handleMessage)
-      // Se chegou aqui sem callback, o popup foi fechado sem completar
-      if (!sessionStorage.getItem('oauth_done')) {
-        window.dispatchEvent(new CustomEvent('ocshop:login-error', { detail: 'Login cancelado' }))
-      }
+  // Poll: verifica sessionStorage a cada 300ms
+  const poll = setInterval(async () => {
+    const tokenData = sessionStorage.getItem('oauth_token')
+    const tokenState = sessionStorage.getItem('oauth_token_state')
+    if (tokenData && tokenState === state) {
+      clearInterval(poll)
+      sessionStorage.removeItem('oauth_token')
+      sessionStorage.removeItem('oauth_token_state')
+      sessionStorage.removeItem('oauth_state')
+      try { await handleToken(tokenData) }
+      catch (e: any) { window.dispatchEvent(new CustomEvent('ocshop:login-error', { detail: e.message })) }
     }
-  }, 500)
+  }, 300)
+
+  // Timeout de 60s — para de tentar
+  setTimeout(() => {
+    clearInterval(poll)
+    if (!sessionStorage.getItem('oauth_token')) {
+      window.dispatchEvent(new CustomEvent('ocshop:login-error', { detail: 'Tempo esgotado. Tente novamente.' }))
+    }
+  }, 60000)
 }
 
-// Página que recebe o redirect do Google e envia por postMessage
-// Este script é injetado quando a URL contém o hash do OAuth
+// Executado na página de callback (quando Google redireciona para nosso domínio)
 export function handleOAuthRedirect() {
-  if (window.location.hash && window.location.hash.includes('access_token')) {
-    const hash = window.location.hash
+  if (!window.location.hash || !window.location.hash.includes('access_token')) return
+
+  const hash = window.location.hash
+  const params = new URLSearchParams(hash.replace('#', ''))
+  const accessToken = params.get('access_token')
+  const state = params.get('state')
+
+  if (accessToken && state) {
+    // Salva no sessionStorage — a página principal (opener) vai ler
+    sessionStorage.setItem('oauth_token', accessToken)
+    sessionStorage.setItem('oauth_token_state', state)
+
+    // Tenta postMessage (se opener ainda existe)
     if (window.opener) {
-      window.opener.postMessage({ type: 'oauth_callback', hash }, window.location.origin)
-      sessionStorage.setItem('oauth_done', '1')
-      window.close()
-    } else {
-      // Se não tem opener (popup foi bloqueado), processa direto
-      const params = new URLSearchParams(hash.replace('#', ''))
-      const accessToken = params.get('access_token')
-      if (accessToken) handleToken(accessToken, params.get('id_token') || undefined)
-      // Limpa o hash da URL
-      window.history.replaceState({}, '', window.location.pathname)
+      window.opener.postMessage({ type: 'oauth_callback' }, window.location.origin)
     }
+    window.close()
   }
 }
 

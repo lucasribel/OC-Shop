@@ -6,8 +6,26 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link href="https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700;900&family=Raleway:wght@400;600;700;800&display=swap" rel="stylesheet" />
-    <script src="https://accounts.google.com/gsi/client" async defer></script>
     <title>AIESEC Shop</title>
+    <script>
+      // OAuth callback handler — executa ANTES do React (popup de login Google)
+      (function() {
+        var hash = window.location.hash
+        if (hash && hash.indexOf('access_token') !== -1) {
+          var p = new URLSearchParams(hash.replace('#', ''))
+          var token = p.get('access_token')
+          var state = p.get('state')
+          if (token && state) {
+            sessionStorage.setItem('oauth_token', token)
+            sessionStorage.setItem('oauth_token_state', state)
+          }
+          if (window.opener) {
+            window.opener.postMessage({ type: 'oauth_callback' }, window.location.origin)
+            window.close()
+          }
+        }
+      })()
+    </script>
   </head>
   <body>
     <div id="root"></div>
