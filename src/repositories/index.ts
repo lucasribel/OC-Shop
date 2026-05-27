@@ -7,19 +7,20 @@ import { JsonOrderRepository } from './json/JsonOrderRepository'
 import { JsonConferenceRepository } from './json/JsonConferenceRepository'
 import { JsonUserRepository } from './json/JsonUserRepository'
 import { JsonSectionRepository } from './json/JsonSectionRepository'
+import { getApiUrl } from '@/config/api'
 
-// Só usa HTTP se VITE_API_URL for uma URL real (começa com http:// ou https://)
-const apiUrl = import.meta.env.VITE_API_URL as string | undefined
-const isHttp = typeof apiUrl === 'string' && (apiUrl.startsWith('http://') || apiUrl.startsWith('https://'))
+const apiUrl = getApiUrl()
+// 'mock' → JSON local | '' ou 'http...' → HTTP (Cloudflare Functions ou backend externo)
+const isMock = apiUrl === 'mock'
 
-if (isHttp) {
-  console.log('[OC-Shop] Modo HTTP — conectando ao backend em', apiUrl)
-} else {
+if (isMock) {
   console.log('[OC-Shop] Modo mock (dados locais)')
+} else {
+  console.log('[OC-Shop] Modo API —', apiUrl || '/api (mesmo domínio)')
 }
 
-export const productRepo = isHttp ? new HttpProductRepository() : new JsonProductRepository()
-export const orderRepo = isHttp ? new HttpOrderRepository() : new JsonOrderRepository()
-export const conferenceRepo = isHttp ? new HttpConferenceRepository() : new JsonConferenceRepository()
-export const userRepo = isHttp ? new HttpUserRepository() : new JsonUserRepository()
+export const productRepo = isMock ? new JsonProductRepository() : new HttpProductRepository()
+export const orderRepo = isMock ? new JsonOrderRepository() : new HttpOrderRepository()
+export const conferenceRepo = isMock ? new JsonConferenceRepository() : new HttpConferenceRepository()
+export const userRepo = isMock ? new JsonUserRepository() : new HttpUserRepository()
 export const sectionRepo = new JsonSectionRepository()
