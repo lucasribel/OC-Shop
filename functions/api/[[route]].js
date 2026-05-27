@@ -117,6 +117,15 @@ export async function onRequest(ctx) {
       if(i===-1)return new Response(JSON.stringify({error:'Not found'}),{status:404,headers:cors})
       const up={...rows[i],...b};await update('Conferences',i,up);return new Response(JSON.stringify(up),{headers:cors})
     }
+
+    if(p.match(/^conferences\/[^/]+$/)&&m==='DELETE'){
+      const id=p.split('/')[1]
+      const d=await read('Conferences'),rows=parseRows(d.values,['collaboratorIds'])
+      const i=rows.findIndex(r=>r.id===id)
+      if(i===-1)return new Response(JSON.stringify({error:'Not found'}),{status:404,headers:cors})
+      await del('Conferences',i)
+      return new Response(null,{status:204,headers:cors})
+    }
     if(p.startsWith('conferences/slug/')&&m==='GET'){
       const slug=p.split('/').pop()
       const d=await read('Conferences'),items=parseRows(d.values,['collaboratorIds'])
