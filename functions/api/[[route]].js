@@ -1,337 +1,209 @@
 /**
- * Cloudflare Pages Function — CRUD completo via Google Sheets API
+ * OC-Shop API — Cloudflare Function
+ * CRUD via Google Sheets + Drive folder management
  */
-async function getAccessToken(email, key) {
-  const header = { alg: 'RS256', typ: 'JWT' }
-  const now = Math.floor(Date.now() / 1000)
-  const claim = { iss: email, scope: 'https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/drive.file', aud: 'https://oauth2.googleapis.com/token', exp: now + 3600, iat: now }
-  const jwt = await signJWT(header, claim, key)
+
+function b64(obj) { return btoa(JSON.stringify(obj)).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'') }
+
+async function accessToken(email, key) {
+  const now = Math.floor(Date.now()/1000)
+  const jwt = await signJWT(
+    { alg:'RS256', typ:'JWT' },
+    { iss:email, scope:'https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/drive.file', aud:'https://oauth2.googleapis.com/token', exp:now+3600, iat:now },
+    key
+  )
   const res = await fetch('https://oauth2.googleapis.com/token', {
-    method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: `grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer&assertion=${jwt}`,
+    method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'},
+    body:'grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer&assertion='+jwt
   })
-  if (!res.ok) throw new Error('Token error: ' + (await res.text()))
+  if (!res.ok) throw new Error('Token error: '+(await res.text()))
   return (await res.json()).access_token
 }
 
 async function signJWT(header, claim, key) {
-  const encoder = new TextEncoder()
-  const b64 = (obj) => btoa(JSON.stringify(obj)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
-  const input = encoder.encode(`${b64(header)}.${b64(claim)}`)
-  const normalizedKey = key.replace(/\\n/g, '\n').replace(/\\r/g, '\r')
-  const pem = normalizedKey.replace(/-----[^-]+-----/g, '').replace(/\s/g, '')
-  const binary = Uint8Array.from([...atob(pem)].map(c => c.charCodeAt(0)))
-  const cryptoKey = await crypto.subtle.importKey('pkcs8', binary, { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, false, ['sign'])
-  const sig = await crypto.subtle.sign('RSASSA-PKCS1-v1_5', cryptoKey, input)
-  const sigB64 = btoa(String.fromCharCode(...new Uint8Array(sig))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
-  return `${b64(header)}.${b64(claim)}.${sigB64}`
+  const enc = new TextEncoder()
+  const input = enc.encode(b64(header)+'.'+b64(claim))
+  // key pode vir limpa (puro base64) ou com marcadores e quebras
+  const pem = key.replace(/-----[^-]+-----/g, '').replace(/\s/g, '').replace(/\\n/g, '')
+  const bin = Uint8Array.from([...atob(pem)].map(c=>c.charCodeAt(0)))
+  const ck = await crypto.subtle.importKey('pkcs8',bin,{name:'RSASSA-PKCS1-v1_5',hash:'SHA-256'},false,['sign'])
+  const sig = await crypto.subtle.sign('RSASSA-PKCS1-v1_5',ck,input)
+  return b64(header)+'.'+b64(claim)+'.'+b64(String.fromCharCode(...new Uint8Array(sig)))
 }
 
-function parseRows(values, jsonFields = []) {
-  if (!values || values.length < 2) return []
-  const headers = values[0]
-  return values.slice(1).map(row => {
-    const obj = {}
-    headers.forEach((h, i) => { obj[h] = row[i] || '' })
-    jsonFields.forEach(f => { try { obj[f] = JSON.parse(obj[f] || '[]') } catch { obj[f] = [] } })
-    if ('price' in obj) obj.price = Number(obj.price) || 0
-    if ('stock' in obj) obj.stock = Number(obj.stock) || 0
-    if ('total' in obj) obj.total = Number(obj.total) || 0
-    if ('active' in obj) obj.active = obj.active === 'true'
-    if ('setupCompleted' in obj) obj.setupCompleted = obj.setupCompleted === 'true'
-    return obj
+function parseRows(values, jsonFields) {
+  if (!values||values.length<2) return []
+  const h = values[0]
+  return values.slice(1).map(r=>{
+    const o={}
+    h.forEach((k,i)=>{o[k]=r[i]||''})
+    ;(jsonFields||[]).forEach(f=>{try{o[f]=JSON.parse(o[f]||'[]')}catch{o[f]=[]}})
+    if('price'in o)o.price=Number(o.price)||0
+    if('stock'in o)o.stock=Number(o.stock)||0
+    if('total'in o)o.total=Number(o.total)||0
+    if('active'in o)o.active=o.active==='true'
+    if('setupCompleted'in o)o.setupCompleted=o.setupCompleted==='true'
+    return o
   })
 }
 
-const SHEET_HEADERS = {
-  Conferences: ['id','name','slug','aiesec','active','status','startDate','endDate','orderDeadline','ownerId','collaboratorIds'],
-  Products:    ['id','conferenceId','name','description','price','stock','image','imageUrl','active','variants'],
-  Orders:      ['id','conferenceId','conferenceSlug','userId','userName','buyerName','buyerEmail','buyerPhone','items','total','status','createdAt'],
-  Users:       ['id','email','name','picture','role','aiesec','googleId','conferenceIds'],
-  Config:      ['mode','allowedAdminDomain','setupCompleted'],
+const H = {
+  C:['id','name','slug','aiesec','active','status','startDate','endDate','orderDeadline','ownerId','collaboratorIds'],
+  P:['id','conferenceId','name','description','price','stock','image','imageUrl','active','variants'],
+  O:['id','conferenceId','conferenceSlug','userId','userName','buyerName','buyerEmail','buyerPhone','items','total','status','createdAt'],
+  U:['id','email','name','picture','role','aiesec','googleId','conferenceIds'],
+  F:['mode','allowedAdminDomain','setupCompleted'],
 }
 
+export async function onRequest(ctx) {
+  const {request:req,env}=ctx
+  const u=new URL(req.url)
+  const p=u.pathname.replace('/api/','')
+  const m=req.method
 
-export async function onRequest(context) {
-  const { request, env } = context
-  const url = new URL(request.url)
-  const path = url.pathname.replace('/api/', '')
-  const method = request.method
+  if(m==='OPTIONS') return new Response(null,{headers:{'Access-Control-Allow-Origin':'*','Access-Control-Allow-Methods':'GET,POST,PUT,DELETE,OPTIONS','Access-Control-Allow-Headers':'Content-Type,Authorization'}})
+  const cors={'Access-Control-Allow-Origin':'*','Content-Type':'application/json'}
 
-  if (method === 'OPTIONS') {
-    return new Response(null, { headers: { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET,POST,PUT,DELETE,OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type,Authorization' } })
-  }
+  try{
+    const sid=env.SPREADSHEET_ID
+    const tok=await accessToken(env.GOOGLE_SERVICE_EMAIL,env.GOOGLE_PRIVATE_KEY)
+    const authH={Authorization:'Bearer '+tok}
+    const uid=()=>crypto.randomUUID()
 
-  const cors = { 'Access-Control-Allow-Origin': '*', 'Content-Type': 'application/json' }
-
-  try {
-    const SID = env.SPREADSHEET_ID
-    const token = await getAccessToken(env.GOOGLE_SERVICE_EMAIL, env.GOOGLE_PRIVATE_KEY)
-    async function findOrCreateFolder(name, parentId) {
-      const q = parentId
-        ? "'" + parentId + "' in parents and name='" + name + "' and mimeType='application/vnd.google-apps.folder' and trashed=false"
-        : "name='" + name + "' and mimeType='application/vnd.google-apps.folder' and trashed=false"
-      const list = await fetch('https://www.googleapis.com/drive/v3/files?q=' + encodeURIComponent(q) + '&fields=files(id,name)', { headers: { Authorization: 'Bearer ' + token } })
-      const data = await list.json()
-      if (data.files && data.files.length) return data.files[0].id
-      const create = await fetch('https://www.googleapis.com/drive/v3/files', {
-        method: 'POST', headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: name, mimeType: 'application/vnd.google-apps.folder', parents: parentId ? [parentId] : [] })
-      })
-      const folder = await create.json()
-      return folder.id
+    async function sh(method,sheet,range,body){
+      const r=await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+sid+'/values/'+encodeURIComponent(sheet)+'!'+range,
+        {method,headers:body?{...authH,'Content-Type':'application/json'}:authH,body:body?JSON.stringify(body):undefined})
+      if(!r.ok)throw new Error('Sheets '+method+' '+range+': '+r.status)
+      return r.status===204?null:r.json()
     }
 
-    async function sheetCall(sheet, method, range, body) {
-      const url = `https://sheets.googleapis.com/v4/spreadsheets/${SID}/values/${encodeURIComponent(sheet)}!${range}`
-      const opts = { method, headers: { Authorization: `Bearer ${token}` } }
-      if (body) { opts.headers['Content-Type'] = 'application/json'; opts.body = JSON.stringify(body) }
-      const r = await fetch(url, opts)
-      if (!r.ok) throw new Error(`Sheets API ${method} ${range}: ${r.status}`)
-      if (r.status === 204) return null
-      return r.json()
+    async function read(sheet){try{return await sh('GET',sheet,'A:Z')}catch{return{values:[]}}}
+    async function append(sheet,data){
+      const hd=H[sheet]||Object.keys(data)
+      await sh('POST',sheet,'A1:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS',{values:[hd.map(k=>String(data[k]??''))]})
     }
-
-    async function readSheet(sheet) {
-      try { return await sheetCall(sheet, 'GET', 'A:Z') }
-      catch { return { values: [] } }
+    async function update(sheet,idx,data){
+      const hd=H[sheet]||Object.keys(data)
+      await sh('PUT',sheet,'A'+(idx+2)+'?valueInputOption=RAW',{values:[hd.map(k=>String(data[k]??''))]})
     }
-
-    async function appendRow(sheet, data) {
-      const headers = SHEET_HEADERS[sheet] || Object.keys(data)
-      const values = headers.map(h => data[h] !== undefined ? String(data[h]) : '')
-      await sheetCall(sheet, 'POST', 'A1:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS', { values: [values] })
-    }
-
-    async function updateRow(sheet, rowIndex, data) {
-      const headers = SHEET_HEADERS[sheet] || Object.keys(data)
-      const values = headers.map(h => data[h] !== undefined ? String(data[h]) : '')
-      await sheetCall(sheet, 'PUT', `A${rowIndex + 2}?valueInputOption=RAW`, { values: [values] })
-    }
-
-    async function deleteSheetRow(sheet, rowIndex) {
-      const meta = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SID}`, { headers: { Authorization: `Bearer ${token}` } })
-      const m = await meta.json()
-      const sh = m.sheets.find(s => s.properties.title === sheet)
-      if (!sh) return
-      await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SID}:batchUpdate`, {
-        method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ requests: [{ deleteDimension: { range: { sheetId: sh.properties.sheetId, dimension: 'ROWS', startIndex: rowIndex + 1, endIndex: rowIndex + 2 } } }] })
+    async function del(sheet,idx){
+      const meta=await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+sid,{headers:authH})
+      const mj=await meta.json()
+      const shj=mj.sheets.find(s=>s.properties.title===sheet)
+      if(!shj)return
+      await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+sid+':batchUpdate',{
+        method:'POST',headers:{...authH,'Content-Type':'application/json'},
+        body:JSON.stringify({requests:[{deleteDimension:{range:{sheetId:shj.properties.sheetId,dimension:'ROWS',startIndex:idx+1,endIndex:idx+2}}}]})
       })
     }
 
-    function uuid() { return crypto.randomUUID() }
+    // ─── Health
+    if(p==='health') return new Response(JSON.stringify({status:'ok'}),{headers:cors})
 
-    async function uploadToDrive(folderId, fileName, mimeType, buffer) {
-      const form = new FormData()
-      form.append('metadata', new Blob([JSON.stringify({ name: fileName, parents: [folderId] })], { type: 'application/json' }))
-      form.append('file', new Blob([buffer], { type: mimeType }))
-      const res = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,webContentLink', {
-        method: 'POST', headers: { Authorization: 'Bearer ' + token }, body: form
-      })
-      const file = await res.json()
-      await fetch('https://www.googleapis.com/drive/v3/files/' + file.id + '/permissions', {
-        method: 'POST', headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ role: 'reader', type: 'anyone' })
-      })
-      return { id: file.id, url: 'https://drive.google.com/uc?export=view&id=' + file.id }
+    // ─── Conferences
+    if(p==='conferences'&&m==='GET'){const d=await read('Conferences');return new Response(JSON.stringify(parseRows(d.values,['collaboratorIds'])),{headers:cors})}
+    if(p==='conferences'&&m==='POST'){const b=await req.json();b.id=b.id||uid();await append('Conferences',b);return new Response(JSON.stringify(b),{status:201,headers:cors})}
+    if(p.match(/^conferences\/[^/]+$/)&&m==='PUT'){
+      const id=p.split('/')[1],b=await req.json()
+      const d=await read('Conferences'),rows=parseRows(d.values,['collaboratorIds'])
+      const i=rows.findIndex(r=>r.id===id)
+      if(i===-1)return new Response(JSON.stringify({error:'Not found'}),{status:404,headers:cors})
+      const up={...rows[i],...b};await update('Conferences',i,up);return new Response(JSON.stringify(up),{headers:cors})
     }
-
-    // ─── Health ─────────────────────
-    if (path === 'health') return new Response(JSON.stringify({ status: 'ok' }), { headers: cors })
-
-    // ─── Conferences ────────────────
-    if (path === 'conferences' && method === 'GET') {
-      const data = await readSheet('Conferences')
-      return new Response(JSON.stringify(parseRows(data.values, ['collaboratorIds'])), { headers: cors })
-    }
-    if (path === 'conferences' && method === 'POST') {
-      const body = await request.json()
-      body.id = body.id || uuid()
-      await appendRow('Conferences', body)
-      return new Response(JSON.stringify(body), { status: 201, headers: cors })
-    }
-    if (path.match(/^conferences\/[^/]+$/) && method === 'PUT') {
-      const id = path.split('/')[1]
-      const body = await request.json()
-      const data = await readSheet('Conferences')
-      const rows = parseRows(data.values, ['collaboratorIds'])
-      const idx = rows.findIndex(r => r.id === id)
-      if (idx === -1) return new Response(JSON.stringify({ error: 'Not found' }), { status: 404, headers: cors })
-      const updated = { ...rows[idx], ...body }
-      await updateRow('Conferences', idx, updated)
-      return new Response(JSON.stringify(updated), { headers: cors })
-    }
-    if (path.startsWith('conferences/slug/') && method === 'GET') {
-      const slug = path.split('/').pop()
-      const data = await readSheet('Conferences')
-      const items = parseRows(data.values, ['collaboratorIds'])
-      return new Response(JSON.stringify(items.find(c => c.slug === slug) || null), { headers: cors })
+    if(p.startsWith('conferences/slug/')&&m==='GET'){
+      const slug=p.split('/').pop()
+      const d=await read('Conferences'),items=parseRows(d.values,['collaboratorIds'])
+      return new Response(JSON.stringify(items.find(c=>c.slug===slug)||null),{headers:cors})
     }
 
-    // ─── Products ───────────────────
-    if (path === 'products' && method === 'GET') {
-      const cid = url.searchParams.get('conferenceId')
-      const data = await readSheet('Products')
-      let items = parseRows(data.values, ['variants'])
-      if (cid) items = items.filter(p => p.conferenceId === cid)
-      return new Response(JSON.stringify(items), { headers: cors })
+    // ─── Products
+    if(p==='products'&&m==='GET'){
+      const cid=u.searchParams.get('conferenceId')
+      const d=await read('Products');let items=parseRows(d.values,['variants'])
+      if(cid)items=items.filter(i=>i.conferenceId===cid)
+      return new Response(JSON.stringify(items),{headers:cors})
     }
-    if (path === 'products' && method === 'POST') {
-      const body = await request.json()
-      body.id = body.id || uuid()
-      await appendRow('Products', body)
-      return new Response(JSON.stringify(body), { status: 201, headers: cors })
+    if(p==='products'&&m==='POST'){const b=await req.json();b.id=b.id||uid();await append('Products',b);return new Response(JSON.stringify(b),{status:201,headers:cors})}
+    if(p.match(/^products\/[^/]+$/)&&m==='PUT'){
+      const id=p.split('/')[1],b=await req.json()
+      const d=await read('Products'),rows=parseRows(d.values,['variants'])
+      const i=rows.findIndex(r=>r.id===id)
+      if(i===-1)return new Response(JSON.stringify({error:'Not found'}),{status:404,headers:cors})
+      const up={...rows[i],...b};await update('Products',i,up);return new Response(JSON.stringify(up),{headers:cors})
     }
-    if (path.match(/^products\/[^/]+$/) && method === 'PUT') {
-      const id = path.split('/')[1]
-      const body = await request.json()
-      const data = await readSheet('Products')
-      const rows = parseRows(data.values, ['variants'])
-      const idx = rows.findIndex(r => r.id === id)
-      if (idx === -1) return new Response(JSON.stringify({ error: 'Not found' }), { status: 404, headers: cors })
-      const updated = { ...rows[idx], ...body }
-      await updateRow('Products', idx, updated)
-      return new Response(JSON.stringify(updated), { headers: cors })
-    }
-    if (path.match(/^products\/[^/]+$/) && method === 'DELETE') {
-      const id = path.split('/')[1]
-      const data = await readSheet('Products')
-      const rows = parseRows(data.values, ['variants'])
-      const idx = rows.findIndex(r => r.id === id)
-      if (idx === -1) return new Response(JSON.stringify({ error: 'Not found' }), { status: 404, headers: cors })
-      await deleteSheetRow('Products', idx)
-      return new Response(null, { status: 204, headers: cors })
+    if(p.match(/^products\/[^/]+$/)&&m==='DELETE'){
+      const id=p.split('/')[1]
+      const d=await read('Products'),rows=parseRows(d.values,['variants'])
+      const i=rows.findIndex(r=>r.id===id)
+      if(i===-1)return new Response(JSON.stringify({error:'Not found'}),{status:404,headers:cors})
+      await del('Products',i);return new Response(null,{status:204,headers:cors})
     }
 
-    // ─── Orders ─────────────────────
-    if (path === 'orders' && method === 'GET') {
-      const cid = url.searchParams.get('conferenceId')
-      const data = await readSheet('Orders')
-      let items = parseRows(data.values, ['items'])
-      if (cid) items = items.filter(o => o.conferenceId === cid)
-      return new Response(JSON.stringify(items), { headers: cors })
+    // ─── Orders
+    if(p==='orders'&&m==='GET'){
+      const cid=u.searchParams.get('conferenceId')
+      const d=await read('Orders');let items=parseRows(d.values,['items'])
+      if(cid)items=items.filter(o=>o.conferenceId===cid)
+      return new Response(JSON.stringify(items),{headers:cors})
     }
-    if (path === 'orders' && method === 'POST') {
-      const body = await request.json()
-      body.id = body.id || uuid()
-      body.createdAt = body.createdAt || new Date().toISOString()
-      body.status = body.status || 'pending'
-      await appendRow('Orders', body)
-      return new Response(JSON.stringify(body), { status: 201, headers: cors })
+    if(p==='orders'&&m==='POST'){const b=await req.json();b.id=b.id||uid();b.createdAt=b.createdAt||new Date().toISOString();b.status=b.status||'pending';await append('Orders',b);return new Response(JSON.stringify(b),{status:201,headers:cors})}
+    if(p.match(/^orders\/[^/]+$/)&&m==='PUT'){
+      const id=p.split('/')[1],b=await req.json()
+      const d=await read('Orders'),rows=parseRows(d.values,['items'])
+      const i=rows.findIndex(r=>r.id===id)
+      if(i===-1)return new Response(JSON.stringify({error:'Not found'}),{status:404,headers:cors})
+      const up={...rows[i],...b};await update('Orders',i,up);return new Response(JSON.stringify(up),{headers:cors})
     }
-    if (path.match(/^orders\/[^/]+$/) && method === 'PUT') {
-      const id = path.split('/')[1]
-      const body = await request.json()
-      const data = await readSheet('Orders')
-      const rows = parseRows(data.values, ['items'])
-      const idx = rows.findIndex(r => r.id === id)
-      if (idx === -1) return new Response(JSON.stringify({ error: 'Not found' }), { status: 404, headers: cors })
-      const updated = { ...rows[idx], ...body }
-      await updateRow('Orders', idx, updated)
-      return new Response(JSON.stringify(updated), { headers: cors })
+    if(p.match(/^orders\/[^/]+$/)&&m==='DELETE'){
+      const id=p.split('/')[1]
+      const d=await read('Orders'),rows=parseRows(d.values,['items'])
+      const i=rows.findIndex(r=>r.id===id)
+      if(i===-1)return new Response(JSON.stringify({error:'Not found'}),{status:404,headers:cors})
+      await del('Orders',i);return new Response(null,{status:204,headers:cors})
     }
-    if (path.match(/^orders\/[^/]+$/) && method === 'DELETE') {
-      const id = path.split('/')[1]
-      const data = await readSheet('Orders')
-      const rows = parseRows(data.values, ['items'])
-      const idx = rows.findIndex(r => r.id === id)
-      if (idx === -1) return new Response(JSON.stringify({ error: 'Not found' }), { status: 404, headers: cors })
-      await deleteSheetRow('Orders', idx)
-      return new Response(null, { status: 204, headers: cors })
-    }
-    if (path.startsWith('orders/buyer') && method === 'GET') {
-      const email = url.searchParams.get('email')
-      const data = await readSheet('Orders')
-      let items = parseRows(data.values, ['items'])
-      if (email) items = items.filter(o => o.buyerEmail === email)
-      return new Response(JSON.stringify(items), { headers: cors })
+    if(p.startsWith('orders/buyer')&&m==='GET'){
+      const email=u.searchParams.get('email')
+      const d=await read('Orders');let items=parseRows(d.values,['items'])
+      if(email)items=items.filter(o=>o.buyerEmail===email)
+      return new Response(JSON.stringify(items),{headers:cors})
     }
 
-    // ─── Users ──────────────────────
-    if (path === 'users' && method === 'GET') {
-      const data = await readSheet('Users')
-      return new Response(JSON.stringify(parseRows(data.values, ['conferenceIds'])), { headers: cors })
+    // ─── Users
+    if(p==='users'&&m==='GET'){const d=await read('Users');return new Response(JSON.stringify(parseRows(d.values,['conferenceIds'])),{headers:cors})}
+    if(p==='users'&&m==='POST'){const b=await req.json();b.id=b.id||uid();await append('Users',b);return new Response(JSON.stringify(b),{status:201,headers:cors})}
+    if(p.match(/^users\/[^/]+$/)&&m==='PUT'){
+      const id=p.split('/')[1],b=await req.json()
+      const d=await read('Users'),rows=parseRows(d.values,['conferenceIds'])
+      const i=rows.findIndex(r=>r.id===id)
+      if(i===-1)return new Response(JSON.stringify({error:'Not found'}),{status:404,headers:cors})
+      const up={...rows[i],...b};await update('Users',i,up);return new Response(JSON.stringify(up),{headers:cors})
     }
-    if (path === 'users' && method === 'POST') {
-      const body = await request.json()
-      body.id = body.id || uuid()
-      await appendRow('Users', body)
-      return new Response(JSON.stringify(body), { status: 201, headers: cors })
-    }
-    if (path.match(/^users\/[^/]+$/) && method === 'PUT') {
-      const id = path.split('/')[1]
-      const body = await request.json()
-      const data = await readSheet('Users')
-      const rows = parseRows(data.values, ['conferenceIds'])
-      const idx = rows.findIndex(r => r.id === id)
-      if (idx === -1) return new Response(JSON.stringify({ error: 'Not found' }), { status: 404, headers: cors })
-      const updated = { ...rows[idx], ...body }
-      await updateRow('Users', idx, updated)
-      return new Response(JSON.stringify(updated), { headers: cors })
-    }
-    if (path.startsWith('users/email/') && method === 'GET') {
-      const em = decodeURIComponent(path.replace('users/email/', ''))
-      const data = await readSheet('Users')
-      const items = parseRows(data.values, ['conferenceIds'])
-      return new Response(JSON.stringify(items.find(u => u.email === em) || null), { headers: cors })
+    if(p.startsWith('users/email/')&&m==='GET'){
+      const em=decodeURIComponent(p.replace('users/email/',''))
+      const d=await read('Users'),items=parseRows(d.values,['conferenceIds'])
+      return new Response(JSON.stringify(items.find(u=>u.email===em)||null),{headers:cors})
     }
 
-    // ─── Config ─────────────────────
-    if (path === 'config' && method === 'GET') {
-      const data = await readSheet('Config')
-      const items = parseRows(data.values, [])
-      return new Response(JSON.stringify(items[0] || { mode: 'closed', allowedAdminDomain: null, setupCompleted: false }), { headers: cors })
-    }
-    if (path === 'config' && method === 'PUT') {
-      const body = await request.json()
-      const data = await readSheet('Config')
-      const rows = parseRows(data.values, [])
-      if (rows.length) await updateRow('Config', 0, body)
-      else await appendRow('Config', body)
-      return new Response(JSON.stringify(body), { headers: cors })
+    // ─── Config
+    if(p==='config'&&m==='GET'){const d=await read('Config'),items=parseRows(d.values,[]);return new Response(JSON.stringify(items[0]||{mode:'closed',allowedAdminDomain:null,setupCompleted:false}),{headers:cors})}
+    if(p==='config'&&m==='PUT'){const b=await req.json();const d=await read('Config'),rows=parseRows(d.values,[]);if(rows.length)await update('Config',0,b);else await append('Config',b);return new Response(JSON.stringify(b),{headers:cors})}
 
-    // ─── Drive Setup ─────────────────
-    if (path === 'setup/drive' && method === 'POST') {
-      const rootId = await findOrCreateFolder(token, 'OC-Shop', null)
-      const systemId = await findOrCreateFolder(token, '_system', rootId)
-      const confsId = await findOrCreateFolder(token, 'Conferences', rootId)
-      return new Response(JSON.stringify({ rootId, systemId, confsId }), { headers: cors })
+    // ─── Drive Setup
+    if(p==='setup/drive'&&m==='POST'){
+      async function ffc(name,parent){
+        const q=parent?"'"+parent+"' in parents and name='"+name+"' and mimeType='application/vnd.google-apps.folder' and trashed=false":"name='"+name+"' and mimeType='application/vnd.google-apps.folder' and trashed=false"
+        const l=await fetch('https://www.googleapis.com/drive/v3/files?q='+encodeURIComponent(q)+'&fields=files(id)',{headers:authH})
+        const d=await l.json()
+        if(d.files&&d.files.length)return d.files[0].id
+        const c=await fetch('https://www.googleapis.com/drive/v3/files',{method:'POST',headers:{...authH,'Content-Type':'application/json'},body:JSON.stringify({name,mimeType:'application/vnd.google-apps.folder',parents:parent?[parent]:[]})})
+        return (await c.json()).id
+      }
+      const rid=await ffc('OC-Shop',null)
+      const sid=await ffc('_system',rid)
+      const cid=await ffc('Conferences',rid)
+      return new Response(JSON.stringify({rootId:rid,systemId:sid,conferencesId:cid}),{headers:cors})
     }
 
-    // ─── Image Upload ───────────────
-    if (path === 'upload/image' && method === 'POST') {
-      const formData = await request.formData()
-      const file = formData.get('image')
-      const conferenceSlug = formData.get('conferenceSlug')
-      if (!file || !conferenceSlug) return new Response(JSON.stringify({ error: 'image and conferenceSlug required' }), { status: 400, headers: cors })
-
-      const rootId = await findOrCreateFolder('OC-Shop', null)
-      const systemId = await findOrCreateFolder('_system', rootId)
-      const confsId = await findOrCreateFolder('Conferences', rootId)
-      return new Response(JSON.stringify({ rootId, systemId, confsId }), { headers: cors })
-    }
-
-    // ─── Image Upload ───────────────
-    if (path === 'upload/image' && method === 'POST') {
-      const formData = await request.formData()
-      const file = formData.get('image')
-      const conferenceSlug = formData.get('conferenceSlug')
-      if (!file || !conferenceSlug) return new Response(JSON.stringify({ error: 'image and conferenceSlug required' }), { status: 400, headers: cors })
-
-      const rootId = await findOrCreateFolder('OC-Shop', null)
-      const confsId = await findOrCreateFolder('Conferences', rootId)
-      const confFolderId = await findOrCreateFolder(conferenceSlug, confsId)
-      const imagesId = await findOrCreateFolder('images', confFolderId)
-
-      const buffer = await file.arrayBuffer()
-      const result = await uploadToDrive(imagesId, file.name, file.type, buffer)
-      return new Response(JSON.stringify(result), { status: 201, headers: cors })
-    }
-
-    return new Response(JSON.stringify({ error: `Route not found: ${method} /api/${path}` }), { status: 404, headers: cors })
-
-  } catch (err) {
-    return new Response(JSON.stringify({ error: err.message }), { status: 500, headers: cors })
-  }
+    return new Response(JSON.stringify({error:'Route not found: '+m+' /api/'+p}),{status:404,headers:cors})
+  }catch(err){return new Response(JSON.stringify({error:err.message}),{status:500,headers:cors})}
 }
