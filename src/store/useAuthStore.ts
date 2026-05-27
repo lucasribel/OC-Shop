@@ -43,8 +43,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
       // Timeout de segurança
       setTimeout(() => {
-        set({ loading: false, error: get().user ? null : 'Tempo esgotado. Tente novamente.' })
-      }, 30000)
+        set({ loading: false, error: get().user ? null : 'Popup do Google não abriu. Verifique se o navegador não bloqueou.' })
+      }, 15000)
       return
     }
 

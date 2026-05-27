@@ -48,15 +48,19 @@ async function handleCredentialResponse(response: { credential: string }) {
 
 function waitForGoogle(): Promise<void> {
   if (window.google?.accounts) return Promise.resolve()
+  console.log('[GoogleAuth] Aguardando carregamento do Google Identity Services...')
   return new Promise((resolve, reject) => {
     let attempts = 0
     const interval = setInterval(() => {
+      attempts++
       if (window.google?.accounts) {
         clearInterval(interval)
+        console.log('[GoogleAuth] GIS carregado após', attempts * 200, 'ms')
         resolve()
-      } else if (++attempts > 50) {
+      } else if (attempts > 50) {
         clearInterval(interval)
-        reject(new Error('Google Identity Services não carregou'))
+        console.error('[GoogleAuth] GIS não carregou após 10s. O script gsi/client está no index.html?')
+        reject(new Error('Serviço Google não carregou. Verifique sua conexão.'))
       }
     }, 200)
   })
@@ -69,18 +73,33 @@ export async function initGoogleAuth(): Promise<void> {
 
   initPromise = (async () => {
     await waitForGoogle()
-    window.google!.accounts.id.initialize({ client_id: CLIENT_ID, callback: handleCredentialResponse })
+    console.log('[GoogleAuth] Inicializando com client_id:', CLIENT_ID.substring(0, 25) + '...')
+    window.google!.accounts.id.initialize({
+      client_id: CLIENT_ID,
+      callback: handleCredentialResponse,
+    })
     initialized = true
-    console.log('[GoogleAuth] Inicializado com client_id:', CLIENT_ID.substring(0, 20) + '...')
   })()
 
   await initPromise
 }
 
 export async function triggerGoogleLogin() {
-  if (!CLIENT_ID) return
+  if (!CLIENT_ID) {
+    console.warn('[GoogleAuth] Sem CLIENT_ID configurado')
+    return
+  }
   await initGoogleAuth()
-  window.google?.accounts.id.prompt()
+
+  console.log('[GoogleAuth] Disparando prompt do Google...')
+  window.google?.accounts.id.prompt((notification) => {
+    // Diagnóstico: o Google NÃO mostrou o One Tap. Motivo:
+    const reason = notification.getNotDisplayedReason?.() || notification.getDismissedReason?.()
+    console.warn('[GoogleAuth] Prompt NÃO exibido. Motivo:', reason || notification)
+    if (notification.isNotDisplayed?.()) {
+      console.warn('[GoogleAuth] Detalhes:', notification.getNotDisplayedReason())
+    }
+  })
 }
 
 export function isGoogleAuthConfigured(): boolean {
