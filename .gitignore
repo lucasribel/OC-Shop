@@ -22,3 +22,7 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+gcloud/
+gcloud.zip
+GoogleCloudSDKInstaller.exe
+deploy.zip
