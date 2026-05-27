@@ -36,28 +36,27 @@ export function AdminLayout({ children }: AdminLayoutProps) {
       navigate('/admin', { replace: true })
       return
     }
-    api.conferences.getBySlug(slug).then((conf) => {
-      if (!conf) {
-        // Retry after 1s — Sheets pode não ter propagado ainda
-        setTimeout(() => {
-          api.conferences.getBySlug(slug).then((retry) => {
-            if (!retry) { navigate('/admin', { replace: true }); return }
-            if (!hasConferenceAccess(retry.id)) { navigate('/admin', { replace: true }); return }
-            setConference(retry)
-            setLoading(false)
-          })
-        }, 1000)
-        return
-      }
-      if (!hasConferenceAccess(conf.id)) {
-        navigate('/admin', { replace: true })
-        return
-      }
-      setConference(conf)
-      setLoading(false)
+    let attempts = 0
+    const maxAttempts = 6
+    const tryLoad = () => {
+      api.conferences.getBySlug(slug).then((conf) => {
+        attempts++
+        if (conf) {
+          if (!hasConferenceAccess(conf.id)) { navigate('/admin', { replace: true }); return }
+          setConference(conf)
+          setLoading(false)
+          return
+        }
+        if (attempts < maxAttempts) {
+          setTimeout(tryLoad, 2000)
+        } else {
+          navigate('/admin', { replace: true })
+        }
+      })
+    }
+    tryLoad()
     })
   }, [slug, navigate, hasConferenceAccess])
-
   if (loading) {
     return (
       <div className="min-h-screen bg-[#F1F5F9] flex items-center justify-center">
