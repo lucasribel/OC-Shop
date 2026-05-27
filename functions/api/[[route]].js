@@ -104,18 +104,8 @@ export async function onRequest(ctx) {
       })
     }
 
-    // ─── Health (com diagnóstico)
-    if(p==='health'){
-      try {
-        const testHeader={alg:'RS256',typ:'JWT'}
-        const now=Math.floor(Date.now()/1000)
-        const testClaim={iss:env.GOOGLE_SERVICE_EMAIL,scope:'test',aud:'test',exp:now+60,iat:now}
-        const testJwt=await signJWT(testHeader,testClaim,env.GOOGLE_PRIVATE_KEY)
-        return new Response(JSON.stringify({status:'ok',jwt_ok:!!testJwt,key_len:env.GOOGLE_PRIVATE_KEY.length,key_start:env.GOOGLE_PRIVATE_KEY.substring(0,40)}),{headers:cors})
-      }catch(e){
-        return new Response(JSON.stringify({status:'error',msg:e.message}),{headers:cors})
-      }
-    }
+    // ─── Health
+    if(p==='health') return new Response(JSON.stringify({status:'ok'}),{headers:cors})
 
     // ─── Conferences
     if(p==='conferences'&&m==='GET'){const d=await read('Conferences');return new Response(JSON.stringify(parseRows(d.values,['collaboratorIds'])),{headers:cors})}
