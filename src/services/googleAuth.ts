@@ -21,7 +21,19 @@ async function handleToken(accessToken: string) {
 
   const { email, name, picture, sub: googleId } = profile
   let user = await api.users.getByEmail(email)
-  if (!user) user = await api.users.create({ email, name, picture, role: 'user', googleId, conferenceIds: [] })
+  if (!user) {
+    // Verifica se deve ser admin
+    let role = 'user'
+    try {
+      const cfg = await api.users.getConfig()
+      if (cfg.mode === 'open') role = 'admin'
+      else if (cfg.allowedAdminDomain) {
+        const domain = cfg.allowedAdminDomain.replace('@', '')
+        if (email.endsWith('@' + domain)) role = 'admin'
+      }
+    } catch {}
+    user = await api.users.create({ email, name, picture, role, googleId, conferenceIds: [] })
+  }
   else if (!user.googleId) await api.users.update(user.id, { googleId, picture: picture || user.picture })
 
   const { useAuthStore } = await import('@/store/useAuthStore')
