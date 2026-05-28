@@ -35,7 +35,7 @@ function CheckOrderModal({
   open: boolean
   onClose: () => void
   conference: Conference
-  onLoadOrder: (items: CartItem[]) => void
+  onLoadOrder: (items: CartItem[], orderId: string) => void
 }) {
   const [email, setEmail] = useState('')
   const [phone, setPhone] = useState('')
@@ -162,7 +162,7 @@ function CheckOrderModal({
                 </p>
                 <button
                   onClick={() => {
-                    onLoadOrder(order.items as CartItem[])
+                    onLoadOrder(order.items as CartItem[], order.id)
                     onClose()
                   }}
                   className="mt-2 w-full py-1.5 text-xs font-medium rounded-lg bg-[#037EF3] text-white hover:bg-[#0256B0] transition-colors"
@@ -504,8 +504,8 @@ const useSections = hasSections && !allSectionsEmpty
         open={checkOrderOpen}
         onClose={() => setCheckOrderOpen(false)}
         conference={conference}
-        onLoadOrder={(items) => {
-          loadOrder(items)
+        onLoadOrder={(items, orderId) => {
+          loadOrder(items, orderId)
           setCheckoutOpen(true)
         }}
       />

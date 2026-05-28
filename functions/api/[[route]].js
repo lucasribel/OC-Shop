@@ -178,6 +178,14 @@ export async function onRequest(ctx) {
       if(i===-1)return new Response(JSON.stringify({error:'Not found'}),{status:404,headers:cors})
       const up={...rows[i],...b};await update('Orders',i,up);return new Response(JSON.stringify(up),{headers:cors})
     }
+
+    if(p.match(/^orders\/[^/]+\/status$/)&&m==='PUT'){
+      const id=p.split('/')[1],b=await req.json()
+      const d=await read('Orders'),rows=parseRows(d.values,['items'])
+      const i=rows.findIndex(r=>r.id===id)
+      if(i===-1)return new Response(JSON.stringify({error:'Not found'}),{status:404,headers:cors})
+      const up={...rows[i],status:b.status};await update('Orders',i,up);return new Response(JSON.stringify(up),{headers:cors})
+    }
     if(p.match(/^orders\/[^/]+$/)&&m==='DELETE'){
       const id=p.split('/')[1]
       const d=await read('Orders'),rows=parseRows(d.values,['items'])
