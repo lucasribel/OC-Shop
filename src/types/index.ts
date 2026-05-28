@@ -53,6 +53,7 @@ export interface Conference {
   collaboratorIds: string[]
   allowOrderEditing?: boolean
   orderEditDeadlineHours?: number
+  spreadsheetId?: string
   pageConfig?: {
     bannerUrl?: string
     bannerTitle?: string

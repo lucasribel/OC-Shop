@@ -23,9 +23,7 @@ async function accessToken(email, key) {
 async function signJWT(header, claim, key) {
   const enc = new TextEncoder()
   const input = enc.encode(b64(header)+'.'+b64(claim))
-  // key pode vir em base64 (btoa do PEM) ou como texto puro
   let pem = key
-  // Tenta decodificar base64 se não contém BEGIN/END
   if (!pem.includes('BEGIN')) {
     try { pem = atob(pem) } catch {}
   }
@@ -57,7 +55,7 @@ function parseRows(values, jsonFields) {
 }
 
 const H = {
-  Conferences:['id','name','slug','aiesec','active','status','startDate','endDate','orderDeadline','ownerId','collaboratorIds','allowOrderEditing','orderEditDeadlineHours'],
+  Conferences:['id','name','slug','aiesec','active','status','startDate','endDate','orderDeadline','ownerId','collaboratorIds','allowOrderEditing','orderEditDeadlineHours','spreadsheetId'],
   Products:['id','conferenceId','name','description','price','stock','image','imageUrl','active','variants'],
   Orders:['id','conferenceId','conferenceSlug','userId','userName','buyerName','buyerEmail','buyerPhone','items','total','status','createdAt'],
   Users:['id','email','name','picture','role','aiesec','googleId','conferenceIds'],
@@ -74,28 +72,28 @@ export async function onRequest(ctx) {
   const cors={'Access-Control-Allow-Origin':'*','Content-Type':'application/json'}
 
   try{
-    const sid=env.SPREADSHEET_ID
+    const masterSid=env.SPREADSHEET_ID
     const tok=await accessToken(env.GOOGLE_SERVICE_EMAIL,env.GOOGLE_PRIVATE_KEY)
     const authH={Authorization:'Bearer '+tok}
     const uid=()=>crypto.randomUUID()
 
-    async function sh(method,sheet,range,body){
+    // ── Sheets helpers (sid parameterizado) ──
+    async function sh(sid,method,sheet,range,body){
       const r=await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+sid+'/values/'+encodeURIComponent(sheet)+'!'+range,
         {method,headers:body?{...authH,'Content-Type':'application/json'}:authH,body:body?JSON.stringify(body):undefined})
       if(!r.ok)throw new Error('Sheets '+method+' '+range+': '+r.status)
       return r.status===204?null:r.json()
     }
-
-    async function read(sheet){try{return await sh('GET',sheet,'A:Z')}catch{return{values:[]}}}
-    async function append(sheet,data){
+    async function read(sid,sheet){try{return await sh(sid,'GET',sheet,'A:Z')}catch{return{values:[]}}}
+    async function append(sid,sheet,data){
       const hd=H[sheet]||Object.keys(data)
-      await sh('POST',sheet,'A1:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS',{values:[hd.map(k=>String(data[k]??''))]})
+      await sh(sid,'POST',sheet,'A1:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS',{values:[hd.map(k=>String(data[k]??''))]})
     }
-    async function update(sheet,idx,data){
+    async function update(sid,sheet,idx,data){
       const hd=H[sheet]||Object.keys(data)
-      await sh('PUT',sheet,'A'+(idx+2)+'?valueInputOption=RAW',{values:[hd.map(k=>String(data[k]??''))]})
+      await sh(sid,'PUT',sheet,'A'+(idx+2)+'?valueInputOption=RAW',{values:[hd.map(k=>String(data[k]??''))]})
     }
-    async function del(sheet,idx){
+    async function del(sid,sheet,idx){
       const meta=await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+sid,{headers:authH})
       const mj=await meta.json()
       const shj=mj.sheets.find(s=>s.properties.title===sheet)
@@ -106,121 +104,212 @@ export async function onRequest(ctx) {
       })
     }
 
+    // ── Resolve spreadsheet para conferência ──
+    async function getConfSpreadsheetId(conferenceId){
+      const d=await read(masterSid,'Conferences'),rows=parseRows(d.values,['collaboratorIds'])
+      const conf=rows.find(r=>r.id===conferenceId)
+      return conf?.spreadsheetId||masterSid
+    }
+
     // ─── Health
     if(p==='health') return new Response(JSON.stringify({status:'ok'}),{headers:cors})
 
     // ─── Conferences
-    if(p==='conferences'&&m==='GET'){const d=await read('Conferences');return new Response(JSON.stringify(parseRows(d.values,['collaboratorIds'])),{headers:cors})}
-    if(p==='conferences'&&m==='POST'){const b=await req.json();b.id=b.id||uid();await append('Conferences',b);return new Response(JSON.stringify(b),{status:201,headers:cors})}
+    if(p==='conferences'&&m==='GET'){const d=await read(masterSid,'Conferences');return new Response(JSON.stringify(parseRows(d.values,['collaboratorIds'])),{headers:cors})}
+    if(p==='conferences'&&m==='POST'){
+      const b=await req.json();b.id=b.id||uid()
+      b.spreadsheetId=masterSid
+      // Compartilha planilha master com o owner da conferência
+      try{
+        const d=await read(masterSid,'Users'),users=parseRows(d.values,['conferenceIds'])
+        const owner=users.find(u=>u.id===b.ownerId)
+        if(owner?.email){
+          await fetch('https://www.googleapis.com/drive/v3/files/'+masterSid+'/permissions',{
+            method:'POST',headers:{...authH,'Content-Type':'application/json'},
+            body:JSON.stringify({role:'writer',type:'user',emailAddress:owner.email})
+          })
+        }
+      }catch(e){/* silencioso */}
+      await append(masterSid,'Conferences',b)
+      return new Response(JSON.stringify(b),{status:201,headers:cors})
+    }
     if(p.match(/^conferences\/[^/]+$/)&&m==='PUT'){
       const id=p.split('/')[1],b=await req.json()
-      const d=await read('Conferences'),rows=parseRows(d.values,['collaboratorIds'])
+      const d=await read(masterSid,'Conferences'),rows=parseRows(d.values,['collaboratorIds'])
       const i=rows.findIndex(r=>r.id===id)
       if(i===-1)return new Response(JSON.stringify({error:'Not found'}),{status:404,headers:cors})
-      const up={...rows[i],...b};await update('Conferences',i,up);return new Response(JSON.stringify(up),{headers:cors})
+      const up={...rows[i],...b};await update(masterSid,'Conferences',i,up);return new Response(JSON.stringify(up),{headers:cors})
     }
-
     if(p.match(/^conferences\/[^/]+$/)&&m==='DELETE'){
       const id=p.split('/')[1]
-      const d=await read('Conferences'),rows=parseRows(d.values,['collaboratorIds'])
+      const d=await read(masterSid,'Conferences'),rows=parseRows(d.values,['collaboratorIds'])
       const i=rows.findIndex(r=>r.id===id)
       if(i===-1)return new Response(JSON.stringify({error:'Not found'}),{status:404,headers:cors})
-      await del('Conferences',i)
+      await del(masterSid,'Conferences',i)
       return new Response(null,{status:204,headers:cors})
     }
     if(p.startsWith('conferences/slug/')&&m==='GET'){
       const slug=p.split('/').pop()
-      const d=await read('Conferences'),items=parseRows(d.values,['collaboratorIds'])
+      const d=await read(masterSid,'Conferences'),items=parseRows(d.values,['collaboratorIds'])
       return new Response(JSON.stringify(items.find(c=>c.slug===slug)||null),{headers:cors})
     }
 
     // ─── Products
     if(p==='products'&&m==='GET'){
       const cid=u.searchParams.get('conferenceId')
-      const d=await read('Products');let items=parseRows(d.values,['variants'])
+      const sid=cid?await getConfSpreadsheetId(cid):masterSid
+      const d=await read(sid,'Products');let items=parseRows(d.values,['variants'])
       if(cid)items=items.filter(i=>i.conferenceId===cid)
       return new Response(JSON.stringify(items),{headers:cors})
     }
-
     if(p.match(/^products\/[^/]+$/)&&m==='GET'){
       const id=p.split('/')[1]
-      const d=await read('Products'),rows=parseRows(d.values,['variants'])
-      const prod=rows.find(r=>r.id===id)
+      // Procura no master e em todas as conf sheets
+      let prod=null
+      const d0=await read(masterSid,'Products');const r0=parseRows(d0.values,['variants'])
+      prod=r0.find(r=>r.id===id)
+      if(!prod){
+        const confs=await read(masterSid,'Conferences');const cr=parseRows(confs.values,['collaboratorIds'])
+        for(const c of cr){
+          if(c.spreadsheetId&&c.spreadsheetId!==masterSid){
+            try{const d=await read(c.spreadsheetId,'Products');const rows=parseRows(d.values,['variants']);const found=rows.find(r=>r.id===id);if(found){prod=found;break}}catch{}
+          }
+        }
+      }
       if(!prod)return new Response(JSON.stringify({error:'Not found'}),{status:404,headers:cors})
       return new Response(JSON.stringify(prod),{headers:cors})
     }
-    if(p==='products'&&m==='POST'){const b=await req.json();b.id=b.id||uid();await append('Products',b);return new Response(JSON.stringify(b),{status:201,headers:cors})}
+    if(p==='products'&&m==='POST'){
+      const b=await req.json();b.id=b.id||uid()
+      const sid=await getConfSpreadsheetId(b.conferenceId)
+      await append(sid,'Products',b)
+      return new Response(JSON.stringify(b),{status:201,headers:cors})
+    }
     if(p.match(/^products\/[^/]+$/)&&m==='PUT'){
       const id=p.split('/')[1],b=await req.json()
-      const d=await read('Products'),rows=parseRows(d.values,['variants'])
-      const i=rows.findIndex(r=>r.id===id)
-      if(i===-1)return new Response(JSON.stringify({error:'Not found'}),{status:404,headers:cors})
-      const up={...rows[i],...b};await update('Products',i,up);return new Response(JSON.stringify(up),{headers:cors})
+      // Encontra o produto e seu spreadsheet
+      let sid=masterSid,rows,idx=-1
+      const d0=await read(masterSid,'Products');rows=parseRows(d0.values,['variants']);idx=rows.findIndex(r=>r.id===id)
+      if(idx===-1){
+        const confs=await read(masterSid,'Conferences');const cr=parseRows(confs.values,['collaboratorIds'])
+        for(const c of cr){
+          if(c.spreadsheetId&&c.spreadsheetId!==masterSid){
+            try{const d=await read(c.spreadsheetId,'Products');rows=parseRows(d.values,['variants']);idx=rows.findIndex(r=>r.id===id);if(idx!==-1){sid=c.spreadsheetId;break}}catch{}
+          }
+        }
+      }
+      if(idx===-1)return new Response(JSON.stringify({error:'Not found'}),{status:404,headers:cors})
+      const up={...rows[idx],...b};await update(sid,'Products',idx,up);return new Response(JSON.stringify(up),{headers:cors})
     }
     if(p.match(/^products\/[^/]+$/)&&m==='DELETE'){
       const id=p.split('/')[1]
-      const d=await read('Products'),rows=parseRows(d.values,['variants'])
-      const i=rows.findIndex(r=>r.id===id)
-      if(i===-1)return new Response(JSON.stringify({error:'Not found'}),{status:404,headers:cors})
-      await del('Products',i);return new Response(null,{status:204,headers:cors})
+      let sid=masterSid,rows,idx=-1
+      const d0=await read(masterSid,'Products');rows=parseRows(d0.values,['variants']);idx=rows.findIndex(r=>r.id===id)
+      if(idx===-1){
+        const confs=await read(masterSid,'Conferences');const cr=parseRows(confs.values,['collaboratorIds'])
+        for(const c of cr){
+          if(c.spreadsheetId&&c.spreadsheetId!==masterSid){
+            try{const d=await read(c.spreadsheetId,'Products');rows=parseRows(d.values,['variants']);idx=rows.findIndex(r=>r.id===id);if(idx!==-1){sid=c.spreadsheetId;break}}catch{}
+          }
+        }
+      }
+      if(idx===-1)return new Response(JSON.stringify({error:'Not found'}),{status:404,headers:cors})
+      await del(sid,'Products',idx);return new Response(null,{status:204,headers:cors})
     }
 
     // ─── Orders
     if(p==='orders'&&m==='GET'){
       const cid=u.searchParams.get('conferenceId')
-      const d=await read('Orders');let items=parseRows(d.values,['items'])
+      const sid=cid?await getConfSpreadsheetId(cid):masterSid
+      const d=await read(sid,'Orders');let items=parseRows(d.values,['items'])
       if(cid)items=items.filter(o=>o.conferenceId===cid)
       return new Response(JSON.stringify(items),{headers:cors})
     }
-    if(p==='orders'&&m==='POST'){const b=await req.json();b.id=b.id||uid();b.createdAt=b.createdAt||new Date().toISOString();b.status=b.status||'pending';await append('Orders',b);return new Response(JSON.stringify(b),{status:201,headers:cors})}
+    if(p==='orders'&&m==='POST'){
+      const b=await req.json();b.id=b.id||uid();b.createdAt=b.createdAt||new Date().toISOString();b.status=b.status||'pending'
+      const sid=await getConfSpreadsheetId(b.conferenceId)
+      await append(sid,'Orders',b)
+      return new Response(JSON.stringify(b),{status:201,headers:cors})
+    }
     if(p.match(/^orders\/[^/]+$/)&&m==='PUT'){
       const id=p.split('/')[1],b=await req.json()
-      const d=await read('Orders'),rows=parseRows(d.values,['items'])
-      const i=rows.findIndex(r=>r.id===id)
-      if(i===-1)return new Response(JSON.stringify({error:'Not found'}),{status:404,headers:cors})
-      const up={...rows[i],...b};await update('Orders',i,up);return new Response(JSON.stringify(up),{headers:cors})
+      let sid=masterSid,rows,idx=-1
+      const d0=await read(masterSid,'Orders');rows=parseRows(d0.values,['items']);idx=rows.findIndex(r=>r.id===id)
+      if(idx===-1){
+        const confs=await read(masterSid,'Conferences');const cr=parseRows(confs.values,['collaboratorIds'])
+        for(const c of cr){
+          if(c.spreadsheetId&&c.spreadsheetId!==masterSid){
+            try{const d=await read(c.spreadsheetId,'Orders');rows=parseRows(d.values,['items']);idx=rows.findIndex(r=>r.id===id);if(idx!==-1){sid=c.spreadsheetId;break}}catch{}
+          }
+        }
+      }
+      if(idx===-1)return new Response(JSON.stringify({error:'Not found'}),{status:404,headers:cors})
+      const up={...rows[idx],...b};await update(sid,'Orders',idx,up);return new Response(JSON.stringify(up),{headers:cors})
     }
-
     if(p.match(/^orders\/[^/]+\/status$/)&&m==='PUT'){
       const id=p.split('/')[1],b=await req.json()
-      const d=await read('Orders'),rows=parseRows(d.values,['items'])
-      const i=rows.findIndex(r=>r.id===id)
-      if(i===-1)return new Response(JSON.stringify({error:'Not found'}),{status:404,headers:cors})
-      const up={...rows[i],status:b.status};await update('Orders',i,up);return new Response(JSON.stringify(up),{headers:cors})
+      let sid=masterSid,rows,idx=-1
+      const d0=await read(masterSid,'Orders');rows=parseRows(d0.values,['items']);idx=rows.findIndex(r=>r.id===id)
+      if(idx===-1){
+        const confs=await read(masterSid,'Conferences');const cr=parseRows(confs.values,['collaboratorIds'])
+        for(const c of cr){
+          if(c.spreadsheetId&&c.spreadsheetId!==masterSid){
+            try{const d=await read(c.spreadsheetId,'Orders');rows=parseRows(d.values,['items']);idx=rows.findIndex(r=>r.id===id);if(idx!==-1){sid=c.spreadsheetId;break}}catch{}
+          }
+        }
+      }
+      if(idx===-1)return new Response(JSON.stringify({error:'Not found'}),{status:404,headers:cors})
+      const up={...rows[idx],status:b.status};await update(sid,'Orders',idx,up);return new Response(JSON.stringify(up),{headers:cors})
     }
     if(p.match(/^orders\/[^/]+$/)&&m==='DELETE'){
       const id=p.split('/')[1]
-      const d=await read('Orders'),rows=parseRows(d.values,['items'])
-      const i=rows.findIndex(r=>r.id===id)
-      if(i===-1)return new Response(JSON.stringify({error:'Not found'}),{status:404,headers:cors})
-      await del('Orders',i);return new Response(null,{status:204,headers:cors})
+      let sid=masterSid,rows,idx=-1
+      const d0=await read(masterSid,'Orders');rows=parseRows(d0.values,['items']);idx=rows.findIndex(r=>r.id===id)
+      if(idx===-1){
+        const confs=await read(masterSid,'Conferences');const cr=parseRows(confs.values,['collaboratorIds'])
+        for(const c of cr){
+          if(c.spreadsheetId&&c.spreadsheetId!==masterSid){
+            try{const d=await read(c.spreadsheetId,'Orders');rows=parseRows(d.values,['items']);idx=rows.findIndex(r=>r.id===id);if(idx!==-1){sid=c.spreadsheetId;break}}catch{}
+          }
+        }
+      }
+      if(idx===-1)return new Response(JSON.stringify({error:'Not found'}),{status:404,headers:cors})
+      await del(sid,'Orders',idx);return new Response(null,{status:204,headers:cors})
     }
     if(p.startsWith('orders/buyer')&&m==='GET'){
       const email=u.searchParams.get('email')
-      const d=await read('Orders');let items=parseRows(d.values,['items'])
+      // Busca no master e em todas as conf sheets
+      let items=[]
+      const d0=await read(masterSid,'Orders');items=parseRows(d0.values,['items'])
+      const confs=await read(masterSid,'Conferences');const cr=parseRows(confs.values,['collaboratorIds'])
+      for(const c of cr){
+        if(c.spreadsheetId&&c.spreadsheetId!==masterSid){
+          try{const d=await read(c.spreadsheetId,'Orders');items=items.concat(parseRows(d.values,['items']))}catch{}
+        }
+      }
       if(email)items=items.filter(o=>o.buyerEmail===email)
       return new Response(JSON.stringify(items),{headers:cors})
     }
 
     // ─── Users
-    if(p==='users'&&m==='GET'){const d=await read('Users');return new Response(JSON.stringify(parseRows(d.values,['conferenceIds'])),{headers:cors})}
-    if(p==='users'&&m==='POST'){const b=await req.json();b.id=b.id||uid();await append('Users',b);return new Response(JSON.stringify(b),{status:201,headers:cors})}
+    if(p==='users'&&m==='GET'){const d=await read(masterSid,'Users');return new Response(JSON.stringify(parseRows(d.values,['conferenceIds'])),{headers:cors})}
+    if(p==='users'&&m==='POST'){const b=await req.json();b.id=b.id||uid();await append(masterSid,'Users',b);return new Response(JSON.stringify(b),{status:201,headers:cors})}
     if(p.match(/^users\/[^/]+$/)&&m==='PUT'){
       const id=p.split('/')[1],b=await req.json()
-      const d=await read('Users'),rows=parseRows(d.values,['conferenceIds'])
+      const d=await read(masterSid,'Users'),rows=parseRows(d.values,['conferenceIds'])
       const i=rows.findIndex(r=>r.id===id)
       if(i===-1)return new Response(JSON.stringify({error:'Not found'}),{status:404,headers:cors})
-      const up={...rows[i],...b};await update('Users',i,up);return new Response(JSON.stringify(up),{headers:cors})
+      const up={...rows[i],...b};await update(masterSid,'Users',i,up);return new Response(JSON.stringify(up),{headers:cors})
     }
     if(p.startsWith('users/email/')&&m==='GET'){
       const em=decodeURIComponent(p.replace('users/email/',''))
-      const d=await read('Users'),items=parseRows(d.values,['conferenceIds'])
+      const d=await read(masterSid,'Users'),items=parseRows(d.values,['conferenceIds'])
       return new Response(JSON.stringify(items.find(u=>u.email===em)||null),{headers:cors})
     }
 
     // ─── Config
-    if(p==='config'&&m==='GET'){const d=await read('Config'),items=parseRows(d.values,[]);return new Response(JSON.stringify(items[0]||{mode:'closed',allowedAdminDomain:null,setupCompleted:false}),{headers:cors})}
-    if(p==='config'&&m==='PUT'){const b=await req.json();const d=await read('Config'),rows=parseRows(d.values,[]);if(rows.length)await update('Config',0,b);else await append('Config',b);return new Response(JSON.stringify(b),{headers:cors})}
+    if(p==='config'&&m==='GET'){const d=await read(masterSid,'Config'),items=parseRows(d.values,[]);return new Response(JSON.stringify(items[0]||{mode:'closed',allowedAdminDomain:null,setupCompleted:false}),{headers:cors})}
+    if(p==='config'&&m==='PUT'){const b=await req.json();const d=await read(masterSid,'Config'),rows=parseRows(d.values,[]);if(rows.length)await update(masterSid,'Config',0,b);else await append(masterSid,'Config',b);return new Response(JSON.stringify(b),{headers:cors})}
 
     // ─── Drive Setup
     if(p==='setup/drive'&&m==='POST'){
