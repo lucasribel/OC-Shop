@@ -85,13 +85,14 @@ export async function onRequest(ctx) {
       return r.status===204?null:r.json()
     }
     async function read(sid,sheet){try{return await sh(sid,'GET',sheet,'A:Z')}catch{return{values:[]}}}
+    function cellVal(v){return typeof v==='object'&&v!==null?JSON.stringify(v):String(v??'')}
     async function append(sid,sheet,data){
       const hd=H[sheet]||Object.keys(data)
-      await sh(sid,'POST',sheet,'A1:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS',{values:[hd.map(k=>String(data[k]??''))]})
+      await sh(sid,'POST',sheet,'A1:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS',{values:[hd.map(k=>cellVal(data[k]))]})
     }
     async function update(sid,sheet,idx,data){
       const hd=H[sheet]||Object.keys(data)
-      await sh(sid,'PUT',sheet,'A'+(idx+2)+'?valueInputOption=RAW',{values:[hd.map(k=>String(data[k]??''))]})
+      await sh(sid,'PUT',sheet,'A'+(idx+2)+'?valueInputOption=RAW',{values:[hd.map(k=>cellVal(data[k]))]})
     }
     async function del(sid,sheet,idx){
       const meta=await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+sid,{headers:authH})
