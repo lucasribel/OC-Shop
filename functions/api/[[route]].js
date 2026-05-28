@@ -139,6 +139,14 @@ export async function onRequest(ctx) {
       if(cid)items=items.filter(i=>i.conferenceId===cid)
       return new Response(JSON.stringify(items),{headers:cors})
     }
+
+    if(p.match(/^products\/[^/]+$/)&&m==='GET'){
+      const id=p.split('/')[1]
+      const d=await read('Products'),rows=parseRows(d.values,['variants'])
+      const prod=rows.find(r=>r.id===id)
+      if(!prod)return new Response(JSON.stringify({error:'Not found'}),{status:404,headers:cors})
+      return new Response(JSON.stringify(prod),{headers:cors})
+    }
     if(p==='products'&&m==='POST'){const b=await req.json();b.id=b.id||uid();await append('Products',b);return new Response(JSON.stringify(b),{status:201,headers:cors})}
     if(p.match(/^products\/[^/]+$/)&&m==='PUT'){
       const id=p.split('/')[1],b=await req.json()
