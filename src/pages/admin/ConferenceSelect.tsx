@@ -47,7 +47,7 @@ function NewConferenceModal({ open, onClose, onCreated }: {
       })
       onCreated(conf); onClose()
     } catch (err) { setError(err instanceof Error ? err.message : 'Erro ao criar conferência') } finally { setSaving(false) }
-
+  }
   if (!open) return null
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
