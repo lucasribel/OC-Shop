@@ -52,7 +52,7 @@ export function triggerGoogleLogin() {
   authUrl.searchParams.set('client_id', CLIENT_ID)
   authUrl.searchParams.set('redirect_uri', redirectUri)
   authUrl.searchParams.set('response_type', 'token')
-  authUrl.searchParams.set('scope', 'email profile')
+  authUrl.searchParams.set('scope', 'email profile https://www.googleapis.com/auth/drive.file')
   authUrl.searchParams.set('state', state)
   authUrl.searchParams.set('include_granted_scopes', 'true')
 
@@ -98,7 +98,6 @@ export function handleOAuthRedirect() {
   const state = params.get('state')
 
   if (accessToken && state) {
-    // Salva no localStorage — a página principal (opener) vai ler
     localStorage.setItem('oauth_token', accessToken)
     localStorage.setItem('oauth_token_state', state)
 

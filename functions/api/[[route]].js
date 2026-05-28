@@ -119,18 +119,7 @@ export async function onRequest(ctx) {
     if(p==='conferences'&&m==='GET'){const d=await read(masterSid,'Conferences');return new Response(JSON.stringify(parseRows(d.values,['collaboratorIds'])),{headers:cors})}
     if(p==='conferences'&&m==='POST'){
       const b=await req.json();b.id=b.id||uid()
-      b.spreadsheetId=masterSid
-      // Compartilha planilha master com o owner da conferência
-      try{
-        const d=await read(masterSid,'Users'),users=parseRows(d.values,['conferenceIds'])
-        const owner=users.find(u=>u.id===b.ownerId)
-        if(owner?.email){
-          await fetch('https://www.googleapis.com/drive/v3/files/'+masterSid+'/permissions',{
-            method:'POST',headers:{...authH,'Content-Type':'application/json'},
-            body:JSON.stringify({role:'writer',type:'user',emailAddress:owner.email})
-          })
-        }
-      }catch(e){/* silencioso */}
+      if(!b.spreadsheetId)b.spreadsheetId=masterSid
       await append(masterSid,'Conferences',b)
       return new Response(JSON.stringify(b),{status:201,headers:cors})
     }

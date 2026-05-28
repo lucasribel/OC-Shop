@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api } from '@/services/api'
+import { createConferenceSpreadsheet } from '@/services/googleDrive'
 import { useAuthStore } from '@/store/useAuthStore'
 import { RoleBadge } from '@/components/ui'
 import { formatDate } from '@/utils/format'
@@ -36,10 +37,16 @@ function NewConferenceModal({ open, onClose, onCreated }: {
     if (!user) return
     setSaving(true); setError(null)
     try {
-      const conf = await api.conferences.create({ name: name.trim(), slug: slug.trim(), aiesec: user.aiesec ?? '', active: status === 'open', status, startDate, endDate, orderDeadline, ownerId: user.id, collaboratorIds: [] })
+      // Cria planilha no Drive do usuário
+      const spreadsheetId = await createConferenceSpreadsheet(name.trim())
+      const conf = await api.conferences.create({
+        name: name.trim(), slug: slug.trim(), aiesec: user.aiesec ?? '',
+        active: status === 'open', status, startDate, endDate, orderDeadline,
+        ownerId: user.id, collaboratorIds: [],
+        spreadsheetId,
+      })
       onCreated(conf); onClose()
     } catch (err) { setError(err instanceof Error ? err.message : 'Erro ao criar conferência') } finally { setSaving(false) }
-  }
 
   if (!open) return null
   return (
