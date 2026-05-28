@@ -50,12 +50,14 @@ function parseRows(values, jsonFields) {
     if('total'in o)o.total=Number(o.total)||0
     if('active'in o)o.active=o.active==='true'
     if('setupCompleted'in o)o.setupCompleted=o.setupCompleted==='true'
+    if('allowOrderEditing'in o)o.allowOrderEditing=o.allowOrderEditing!=='false'
+    if('orderEditDeadlineHours'in o)o.orderEditDeadlineHours=Number(o.orderEditDeadlineHours)||48
     return o
   })
 }
 
 const H = {
-  Conferences:['id','name','slug','aiesec','active','status','startDate','endDate','orderDeadline','ownerId','collaboratorIds'],
+  Conferences:['id','name','slug','aiesec','active','status','startDate','endDate','orderDeadline','ownerId','collaboratorIds','allowOrderEditing','orderEditDeadlineHours'],
   Products:['id','conferenceId','name','description','price','stock','image','imageUrl','active','variants'],
   Orders:['id','conferenceId','conferenceSlug','userId','userName','buyerName','buyerEmail','buyerPhone','items','total','status','createdAt'],
   Users:['id','email','name','picture','role','aiesec','googleId','conferenceIds'],

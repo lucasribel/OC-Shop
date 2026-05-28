@@ -14,7 +14,7 @@ interface CheckoutDrawerProps {
 }
 
 export function CheckoutDrawer({ open, onClose, conference, onSuccess }: CheckoutDrawerProps) {
-  const { items, total, clear, editingOrderId } = useCartStore()
+  const { items, total, clear } = useCartStore()
   const authUser = useAuthStore((s) => s.user)
 
   const [name, setName] = useState('')
@@ -66,18 +66,13 @@ export function CheckoutDrawer({ open, onClose, conference, onSuccess }: Checkou
     setLoading(true)
 
     try {
-      // Se está editando um pedido existente, cancela o antigo
-      if (editingOrderId) {
-        await api.orders.updateStatus(editingOrderId, 'cancelled')
-      } else {
-        // Check duplicate only for new orders
-        const duplicate = await api.orders.checkDuplicate(email, conference.id)
-        if (duplicate && duplicate.status !== 'cancelled') {
-          setExistingOrder(duplicate)
-          setStep('duplicate')
-          setLoading(false)
-          return
-        }
+      // Check duplicate
+      const duplicate = await api.orders.checkDuplicate(email, conference.id)
+      if (duplicate && duplicate.status !== 'cancelled') {
+        setExistingOrder(duplicate)
+        setStep('duplicate')
+        setLoading(false)
+        return
       }
 
       // Create order

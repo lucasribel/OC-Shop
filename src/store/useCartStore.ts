@@ -11,7 +11,6 @@ export interface CartItem {
 
 interface CartState {
   items: CartItem[]
-  editingOrderId: string | null
   setQuantity: (
     productId: string,
     productName: string,
@@ -23,14 +22,12 @@ interface CartState {
   updateVariant: (productId: string, label: string, value: string) => void
   removeItem: (productId: string) => void
   clear: () => void
-  loadOrder: (orderItems: CartItem[], orderId?: string) => void
   total: () => number
   itemCount: () => number
 }
 
 export const useCartStore = create<CartState>((set, get) => ({
   items: [],
-  editingOrderId: null,
 
   setQuantity: (productId, productName, unitPrice, quantity, imageUrl, selectedVariants) => {
     set((state) => {
@@ -76,11 +73,7 @@ export const useCartStore = create<CartState>((set, get) => ({
     }))
   },
 
-  clear: () => set({ items: [], editingOrderId: null }),
-
-  loadOrder: (orderItems, orderId) => {
-    set({ items: orderItems.map((i) => ({ ...i })), editingOrderId: orderId ?? null })
-  },
+  clear: () => set({ items: [] }),
 
   total: () => get().items.reduce((sum, i) => sum + i.unitPrice * i.quantity, 0),
 

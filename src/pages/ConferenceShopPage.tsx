@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { api } from '@/services/api'
-import { useCartStore, type CartItem } from '@/store/useCartStore'
+import { useCartStore } from '@/store/useCartStore'
 import { useAuthStore } from '@/store/useAuthStore'
 import { ProductCard } from '@/components/shop/ProductCard'
 import { CheckoutDrawer } from '@/components/shop/CheckoutDrawer'
+import { OrderEditorModal } from '@/components/shop/OrderEditorModal'
 import { formatDate, formatDateTime } from '@/utils/format'
 import type { Conference, Product, Order, ProductSection } from '@/types'
 
@@ -30,27 +31,28 @@ function CheckOrderModal({
   open,
   onClose,
   conference,
-  onLoadOrder,
+  products,
 }: {
   open: boolean
   onClose: () => void
   conference: Conference
-  onLoadOrder: (items: CartItem[], orderId: string) => void
+  products: Product[]
 }) {
   const [email, setEmail] = useState('')
   const [phone, setPhone] = useState('')
   const [orders, setOrders] = useState<Order[]>([])
   const [searched, setSearched] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [editingOrder, setEditingOrder] = useState<Order | null>(null)
 
   useEffect(() => {
     if (open) {
-      // Pre-fill from cache
       const cache = JSON.parse(sessionStorage.getItem('aiesec_order_cache') || '[]')
       const cached = cache.find((c: any) => c.conferenceSlug === conference.slug)
       if (cached?.email) setEmail(cached.email)
       setOrders([])
       setSearched(false)
+      setEditingOrder(null)
     }
   }, [open, conference.slug])
 
@@ -62,6 +64,18 @@ function CheckOrderModal({
     setOrders(filtered)
     setSearched(true)
     setLoading(false)
+  }
+
+  const canEdit = (order: Order) => {
+    const allow = conference.allowOrderEditing !== false
+    const deadlineH = conference.orderEditDeadlineHours ?? 48
+    const created = new Date(order.createdAt).getTime()
+    const deadline = created + deadlineH * 3600000
+    return allow && Date.now() < deadline
+  }
+
+  const handleEditSaved = (updated: Order) => {
+    setOrders(prev => prev.map(o => o.id === updated.id ? updated : o))
   }
 
   if (!open) return null
@@ -154,21 +168,26 @@ function CheckOrderModal({
                         {item.productName} × {item.quantity}
                       </p>
                     ))}
-                <p className="text-xs font-medium text-gray-900 mt-1">
-                  Total: R$ {order.total.toFixed(2)}
-                </p>
-                <p className="text-xs text-gray-400 mt-1">
-                  {formatDateTime(order.createdAt)}
-                </p>
-                <button
-                  onClick={() => {
-                    onLoadOrder(order.items as CartItem[], order.id)
-                    onClose()
-                  }}
-                  className="mt-2 w-full py-1.5 text-xs font-medium rounded-lg bg-[#037EF3] text-white hover:bg-[#0256B0] transition-colors"
-                >
-                  Carregar no carrinho
-                </button>
+                    <p className="text-xs font-medium text-gray-900 mt-1">
+                      Total: R$ {order.total.toFixed(2)}
+                    </p>
+                    <p className="text-xs text-gray-400 mt-1">
+                      {formatDateTime(order.createdAt)}
+                    </p>
+                    {canEdit(order) ? (
+                      <button
+                        onClick={() => setEditingOrder(order)}
+                        className="mt-2 w-full py-1.5 text-xs font-medium rounded-lg bg-[#037EF3] text-white hover:bg-[#0256B0] transition-colors"
+                      >
+                        Editar meu pedido
+                      </button>
+                    ) : (
+                      <p className="mt-2 text-xs text-gray-400 text-center">
+                        {conference.allowOrderEditing === false
+                          ? 'Edição não disponível'
+                          : 'Prazo de edição expirado'}
+                      </p>
+                    )}
                   </div>
                 ))}
               </div>
@@ -176,6 +195,14 @@ function CheckOrderModal({
           </div>
         )}
       </div>
+
+      <OrderEditorModal
+        open={!!editingOrder}
+        order={editingOrder!}
+        products={products}
+        onClose={() => setEditingOrder(null)}
+        onSaved={handleEditSaved}
+      />
     </div>
   )
 }
@@ -222,7 +249,7 @@ export default function ConferenceShopPage() {
   const { slug } = useParams<{ slug: string }>()
   const navigate = useNavigate()
   const user = useAuthStore((s) => s.user)
-  const { itemCount, total, loadOrder } = useCartStore()
+  const { itemCount, total } = useCartStore()
 
   const [conference, setConference] = useState<Conference | null>(null)
   const [products, setProducts] = useState<Product[]>([])
@@ -503,11 +530,8 @@ const useSections = hasSections && !allSectionsEmpty
       <CheckOrderModal
         open={checkOrderOpen}
         onClose={() => setCheckOrderOpen(false)}
-        conference={conference}
-        onLoadOrder={(items, orderId) => {
-          loadOrder(items, orderId)
-          setCheckoutOpen(true)
-        }}
+        conference={conference!}
+        products={products}
       />
     </div>
   )

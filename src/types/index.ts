@@ -51,6 +51,8 @@ export interface Conference {
   orderDeadline: string
   ownerId: string
   collaboratorIds: string[]
+  allowOrderEditing?: boolean
+  orderEditDeadlineHours?: number
   pageConfig?: {
     bannerUrl?: string
     bannerTitle?: string
