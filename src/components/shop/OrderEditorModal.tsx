@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { api } from '@/services/api'
 import type { Order, Product } from '@/types'
 import { formatCurrency } from '@/utils/format'
@@ -12,9 +12,13 @@ interface OrderEditorModalProps {
 }
 
 export function OrderEditorModal({ open, order, products, onClose, onSaved }: OrderEditorModalProps) {
-  const [items, setItems] = useState(order.items.map(i => ({ ...i })))
+  const [items, setItems] = useState(order?.items?.map(i => ({ ...i })) ?? [])
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+
+  useEffect(() => {
+    if (order) setItems(order.items.map(i => ({ ...i })))
+  }, [order])
 
   const total = items.reduce((sum, i) => sum + i.unitPrice * i.quantity, 0)
 
