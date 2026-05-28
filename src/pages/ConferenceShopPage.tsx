@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { api } from '@/services/api'
-import { useCartStore } from '@/store/useCartStore'
+import { useCartStore, type CartItem } from '@/store/useCartStore'
 import { useAuthStore } from '@/store/useAuthStore'
 import { ProductCard } from '@/components/shop/ProductCard'
 import { CheckoutDrawer } from '@/components/shop/CheckoutDrawer'
@@ -26,15 +26,16 @@ function NotFound() {
   )
 }
 
-// ---------- CheckOrderModal ----------
 function CheckOrderModal({
   open,
   onClose,
   conference,
+  onLoadOrder,
 }: {
   open: boolean
   onClose: () => void
   conference: Conference
+  onLoadOrder: (items: CartItem[]) => void
 }) {
   const [email, setEmail] = useState('')
   const [phone, setPhone] = useState('')
@@ -153,12 +154,21 @@ function CheckOrderModal({
                         {item.productName} × {item.quantity}
                       </p>
                     ))}
-                    <p className="text-xs font-medium text-gray-900 mt-1">
-                      Total: R$ {order.total.toFixed(2)}
-                    </p>
-                    <p className="text-xs text-gray-400 mt-1">
-                      {formatDateTime(order.createdAt)}
-                    </p>
+                <p className="text-xs font-medium text-gray-900 mt-1">
+                  Total: R$ {order.total.toFixed(2)}
+                </p>
+                <p className="text-xs text-gray-400 mt-1">
+                  {formatDateTime(order.createdAt)}
+                </p>
+                <button
+                  onClick={() => {
+                    onLoadOrder(order.items as CartItem[])
+                    onClose()
+                  }}
+                  className="mt-2 w-full py-1.5 text-xs font-medium rounded-lg bg-[#037EF3] text-white hover:bg-[#0256B0] transition-colors"
+                >
+                  Carregar no carrinho
+                </button>
                   </div>
                 ))}
               </div>
@@ -212,7 +222,7 @@ export default function ConferenceShopPage() {
   const { slug } = useParams<{ slug: string }>()
   const navigate = useNavigate()
   const user = useAuthStore((s) => s.user)
-  const { itemCount, total } = useCartStore()
+  const { itemCount, total, loadOrder } = useCartStore()
 
   const [conference, setConference] = useState<Conference | null>(null)
   const [products, setProducts] = useState<Product[]>([])
@@ -494,6 +504,10 @@ const useSections = hasSections && !allSectionsEmpty
         open={checkOrderOpen}
         onClose={() => setCheckOrderOpen(false)}
         conference={conference}
+        onLoadOrder={(items) => {
+          loadOrder(items)
+          setCheckoutOpen(true)
+        }}
       />
     </div>
   )
