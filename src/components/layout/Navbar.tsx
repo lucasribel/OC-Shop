@@ -43,11 +43,11 @@ export function Navbar() {
 
           {/* Desktop nav */}
           <div className="hidden md:flex items-center gap-6">
+            <Link to="/meus-pedidos" className="text-sm font-medium text-gray-500 hover:text-[#037EF3] transition-colors">
+              Meus Pedidos
+            </Link>
             {user ? (
               <>
-                <Link to="/meus-pedidos" className="text-sm font-medium text-gray-500 hover:text-[#037EF3] transition-colors">
-                  Meus Pedidos
-                </Link>
                 {isAdminUser && (
                   <Link to="/admin" className="text-sm font-medium text-gray-500 hover:text-[#037EF3] transition-colors">
                     Admin
@@ -96,10 +96,10 @@ export function Navbar() {
               </>
             ) : (
               <button
-                onClick={() => navigate('/login')}
+                onClick={() => navigate('/entrar')}
                 className="px-5 py-2 rounded-lg text-sm font-semibold bg-[#037EF3] text-white hover:bg-[#0256B0] transition-colors"
               >
-                Entrar →
+                Admin
               </button>
             )}
           </div>
@@ -155,12 +155,17 @@ export function Navbar() {
                   </button>
                 </>
               ) : (
-                <button
-                  onClick={() => { navigate('/login'); setMobileOpen(false) }}
-                  className="w-full py-2.5 rounded-lg text-sm font-semibold bg-[#037EF3] text-white hover:bg-[#0256B0] transition-colors"
-                >
-                  Entrar →
-                </button>
+                <>
+                  <Link to="/meus-pedidos" className="block px-3 py-2.5 text-sm text-gray-700 hover:bg-gray-50 rounded-lg" onClick={() => setMobileOpen(false)}>
+                    Meus Pedidos
+                  </Link>
+                  <button
+                    onClick={() => { navigate('/entrar'); setMobileOpen(false) }}
+                    className="w-full py-2.5 rounded-lg text-sm font-semibold bg-[#037EF3] text-white hover:bg-[#0256B0] transition-colors"
+                  >
+                    Admin
+                  </button>
+                </>
               )}
             </div>
           </div>

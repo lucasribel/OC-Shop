@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import type { User } from '@/types'
-import { signInWithGoogle, signOut } from '@/services/auth'
+import { signInWithGoogle, signOut, loginWithPassword, logoutSession, restoreSession } from '@/services/auth'
 import { isGoogleAuthConfigured } from '@/services/googleAuth'
 
 interface ConferenceAccess {
@@ -14,9 +14,14 @@ interface AuthState {
   user: User | null
   loading: boolean
   error: string | null
+  buyerEmail: string | null
   login: () => Promise<void>
+  loginWithPassword: (email: string, password: string) => Promise<void>
   logout: () => Promise<void>
   setUser: (user: User | null) => void
+  setBuyerEmail: (email: string) => void
+  clearBuyerEmail: () => void
+  restoreSession: () => Promise<void>
   isAdmin: () => boolean
   isCollaborator: () => boolean
   isSuperAdmin: () => boolean
@@ -29,6 +34,7 @@ export const useAuthStore = create<AuthState>()(
   user: null,
   loading: false,
   error: null,
+  buyerEmail: null,
 
   login: async () => {
     set({ loading: true, error: null })
@@ -66,12 +72,35 @@ export const useAuthStore = create<AuthState>()(
     }
   },
 
+  loginWithPassword: async (email, password) => {
+    set({ loading: true, error: null })
+    try {
+      const user = await loginWithPassword(email, password)
+      set({ user, loading: false })
+    } catch (e) {
+      set({ error: e instanceof Error ? e.message : 'Falha ao entrar', loading: false })
+    }
+  },
+
   logout: async () => {
     await signOut()
+    await logoutSession()
     set({ user: null })
   },
 
   setUser: (user) => set({ user }),
+
+  setBuyerEmail: (email) => set({ buyerEmail: email }),
+
+  clearBuyerEmail: () => set({ buyerEmail: null }),
+
+  restoreSession: async () => {
+    try {
+      const { user, adminAuthMode } = await restoreSession()
+      if (user) set({ user })
+      else if (adminAuthMode === 'password') set({ user: null })
+    } catch { /* sessão não restaurada */ }
+  },
 
   isAdmin: () => {
     const role = get().user?.role
@@ -96,7 +125,7 @@ export const useAuthStore = create<AuthState>()(
     }),
     {
       name: 'oc-shop-auth',
-      partialize: (state) => ({ user: state.user }),
+      partialize: (state) => ({ user: state.user, buyerEmail: state.buyerEmail }),
     }
   )
 )

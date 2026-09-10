@@ -17,12 +17,11 @@ async function handleToken(accessToken: string) {
   const { email, name, picture, sub: googleId } = profile
   let user = await api.users.getByEmail(email)
   if (!user) {
-    // Verifica se deve ser admin
+    // Só concede admin via Google em modo google + domínio permitido
     let role: UserRole = 'user'
     try {
       const cfg = await api.users.getConfig()
-      if (cfg.mode === 'open') role = 'admin'
-      else if (cfg.allowedAdminDomain) {
+      if (cfg.adminAuthMode !== 'password' && cfg.allowedAdminDomain) {
         const domain = cfg.allowedAdminDomain.replace('@', '')
         if (email.endsWith('@' + domain)) role = 'admin'
       }

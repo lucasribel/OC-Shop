@@ -73,6 +73,7 @@ export const router = createBrowserRouter([
       { index: true, element: <Home /> },
       { path: '/login', element: <GuestOnly><Login /></GuestOnly> },
       { path: '/entrar', element: <GuestOnlyAdmin><AdminLogin /></GuestOnlyAdmin> },
+      { path: '/meus-pedidos', element: <MeusPedidos /> },
 
       // Admin management pages
       { path: '/admin', element: <RequireAdminAccess><ConferenceSelect /></RequireAdminAccess> },
@@ -101,7 +102,6 @@ export const router = createBrowserRouter([
         path: '/',
         element: <RequireAuth><Outlet /></RequireAuth>,
         children: [
-          { path: 'meus-pedidos', element: <MeusPedidos /> },
           {
             path: 'admin/produtos',
             element: <RequireRole role="admin"><AdminProdutos /></RequireRole>,

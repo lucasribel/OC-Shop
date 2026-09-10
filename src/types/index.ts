@@ -18,6 +18,13 @@ export interface SystemConfig {
   spreadsheetUrl?: string
   driveFolderId?: string
   driveFolderUrl?: string
+  adminAuthMode?: 'google' | 'password'
+  adminEmail?: string
+}
+
+export interface AuthConfig {
+  adminAuthMode: 'google' | 'password'
+  adminEmail?: string
 }
 
 // ---------------------------------------------------------------------------

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api } from '@/services/api'
 import { useAuthStore } from '@/store/useAuthStore'
+import { getAuthConfig, setAdminPassword as saveAdminPassword } from '@/services/auth'
 import { AdminSystemLayout } from '@/components/layout/AdminSystemLayout'
 import type { SystemConfig } from '@/types'
 
@@ -144,12 +145,44 @@ export default function ConfigPanel() {
   const [hardResetChecks, setHardResetChecks] = useState<Record<string, boolean>>({})
   const [hardResetConfirm, setHardResetConfirm] = useState('')
 
+  const [authMode, setAuthMode] = useState<'google' | 'password'>('google')
+  const [adminEmail, setAdminEmail] = useState('')
+  const [adminPassword, setAdminPassword] = useState('')
+  const [authSaving, setAuthSaving] = useState(false)
+  const [authMsg, setAuthMsg] = useState<string | null>(null)
+  const [authError, setAuthError] = useState<string | null>(null)
+
   useEffect(() => {
     api.users.getConfig().then((cfg) => {
       setForm(configToForm(cfg))
       setLoading(false)
     }).catch(() => setLoading(false))
+
+    getAuthConfig().then((cfg) => {
+      setAuthMode(cfg.adminAuthMode)
+      setAdminEmail(cfg.adminEmail ?? '')
+    }).catch(() => {})
   }, [])
+
+  const handleSaveAuth = async () => {
+    if (!adminEmail.trim() || !adminPassword) {
+      setAuthError('Informe o e-mail do admin e uma senha')
+      return
+    }
+    setAuthSaving(true)
+    setAuthError(null)
+    setAuthMsg(null)
+    try {
+      await saveAdminPassword(adminEmail.trim(), adminPassword, authMode)
+      setAdminPassword('')
+      setAuthMsg('Autenticação salva com sucesso!')
+      setTimeout(() => setAuthMsg(null), 3000)
+    } catch (e) {
+      setAuthError(e instanceof Error ? e.message : 'Erro ao salvar autenticação')
+    } finally {
+      setAuthSaving(false)
+    }
+  }
 
   const handleSave = async () => {
     setSaving(true)
@@ -367,6 +400,52 @@ export default function ConfigPanel() {
           {/* ─── Avançado ─── */}
           {activeTab === 'avancado' && isSuperAdmin() && (
             <div className="space-y-6">
+              {/* Autenticação do administrador */}
+              <div className="p-5 rounded-lg border border-gray-200">
+                <h3 className="font-display text-base font-semibold text-[#1A1A2E] mb-1">Autenticação do administrador</h3>
+                <p className="text-sm text-gray-500 mb-4">
+                  Como o admin entra no painel. Em modo senha, o login usa e-mail + senha (a senha é armazenada com hash). Em modo Google, usa o login do Google.
+                </p>
+                <div className="space-y-4">
+                  <div className="flex items-center gap-4">
+                    <span className={`text-sm font-medium ${authMode !== 'password' ? 'text-[#1A1A2E]' : 'text-gray-400'}`}>Google</span>
+                    <button
+                      type="button"
+                      onClick={() => setAuthMode(authMode === 'password' ? 'google' : 'password')}
+                      className={`relative w-14 h-7 rounded-full transition-colors duration-200 ${authMode === 'password' ? 'bg-[#037EF3]' : 'bg-gray-200'}`}
+                    >
+                      <span className={`absolute top-1 left-1 w-5 h-5 rounded-full bg-white shadow-sm transition-transform duration-200 ${authMode === 'password' ? 'translate-x-7' : 'translate-x-0'}`} />
+                    </button>
+                    <span className={`text-sm font-medium ${authMode === 'password' ? 'text-[#1A1A2E]' : 'text-gray-400'}`}>Senha</span>
+                  </div>
+                  <InputField
+                    label="E-mail do administrador"
+                    value={adminEmail}
+                    onChange={setAdminEmail}
+                    placeholder="admin@aiesec.net"
+                  />
+                  <InputField
+                    label="Senha"
+                    value={adminPassword}
+                    onChange={setAdminPassword}
+                    placeholder="Digite uma senha forte"
+                    type="password"
+                  />
+                  <div className="flex items-center gap-4">
+                    <button
+                      type="button"
+                      onClick={handleSaveAuth}
+                      disabled={authSaving}
+                      className="px-5 py-2.5 rounded-lg text-sm font-semibold bg-[#037EF3] text-white hover:bg-[#0256B0] disabled:opacity-50"
+                    >
+                      {authSaving ? 'Salvando...' : 'Salvar autenticação'}
+                    </button>
+                    {authMsg && <p className="text-sm text-[#00A94F] font-medium">{authMsg}</p>}
+                    {authError && <p className="text-sm text-[#E53E3E] font-medium">{authError}</p>}
+                  </div>
+                </div>
+              </div>
+
               {/* Reconfigurar */}
               <div className="p-5 rounded-lg border border-gray-200">
                 <h3 className="font-display text-base font-semibold text-[#1A1A2E] mb-1">Reconfigurar sistema</h3>

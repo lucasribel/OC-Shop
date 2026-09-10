@@ -62,6 +62,102 @@ const H = {
   Config:['mode','allowedAdminDomain','setupCompleted'],
 }
 
+// ---------------------------------------------------------------------------
+// Auth helpers — hash de senha (PBKDF2), sessão assinada (HMAC), cookies
+// ---------------------------------------------------------------------------
+
+const PBKDF2_ITERATIONS = 60000
+const SESSION_COOKIE = 'oc_admin_session'
+const SESSION_TTL_SECONDS = 7 * 24 * 3600
+
+function bytesToB64url(bytes) {
+  let bin = ''
+  for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i])
+  return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+}
+
+function b64urlToBytes(str) {
+  str = str.replace(/-/g, '+').replace(/_/g, '/')
+  while (str.length % 4) str += '='
+  const bin = atob(str)
+  const bytes = new Uint8Array(bin.length)
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i)
+  return bytes
+}
+
+async function pbkdf2(password, salt, iterations, lenBytes) {
+  const enc = new TextEncoder()
+  const baseKey = await crypto.subtle.importKey('raw', enc.encode(password), 'PBKDF2', false, ['deriveBits'])
+  const bits = await crypto.subtle.deriveBits(
+    { name: 'PBKDF2', hash: 'SHA-256', salt, iterations },
+    baseKey,
+    lenBytes * 8
+  )
+  return new Uint8Array(bits)
+}
+
+async function hashPassword(password) {
+  const salt = crypto.getRandomValues(new Uint8Array(16))
+  const derived = await pbkdf2(password, salt, PBKDF2_ITERATIONS, 32)
+  return ['pbkdf2_sha256', String(PBKDF2_ITERATIONS), bytesToB64url(salt), bytesToB64url(derived)].join('$')
+}
+
+async function verifyPassword(password, stored) {
+  if (!stored) return false
+  const parts = String(stored).split('$')
+  if (parts.length !== 4 || parts[0] !== 'pbkdf2_sha256') return false
+  const iterations = parseInt(parts[1], 10)
+  if (!iterations || iterations < 1) return false
+  const salt = b64urlToBytes(parts[2])
+  const expected = b64urlToBytes(parts[3])
+  const actual = await pbkdf2(password, salt, iterations, expected.length)
+  // comparação em tempo constante
+  if (actual.length !== expected.length) return false
+  let diff = 0
+  for (let i = 0; i < actual.length; i++) diff |= actual[i] ^ expected[i]
+  return diff === 0
+}
+
+async function sessionKey(env) {
+  const enc = new TextEncoder()
+  const secret = env.GOOGLE_PRIVATE_KEY || env.GOOGLE_SERVICE_EMAIL || 'oc-shop-session'
+  const digest = await crypto.subtle.digest('SHA-256', enc.encode(secret))
+  return crypto.subtle.importKey('raw', digest, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign', 'verify'])
+}
+
+async function signSession(env, payload) {
+  const key = await sessionKey(env)
+  const enc = new TextEncoder()
+  const body = bytesToB64url(enc.encode(JSON.stringify(payload)))
+  const sig = await crypto.subtle.sign('HMAC', key, enc.encode(body))
+  return body + '.' + bytesToB64url(new Uint8Array(sig))
+}
+
+async function verifySession(env, token) {
+  if (!token || token.indexOf('.') === -1) return null
+  const dot = token.lastIndexOf('.')
+  const body = token.slice(0, dot)
+  const key = await sessionKey(env)
+  const enc = new TextEncoder()
+  const ok = await crypto.subtle.verify('HMAC', key, b64urlToBytes(token.slice(dot + 1)), enc.encode(body))
+  if (!ok) return null
+  try {
+    const payload = JSON.parse(new TextDecoder().decode(b64urlToBytes(body)))
+    if (payload.exp && payload.exp < Math.floor(Date.now() / 1000)) return null
+    return payload
+  } catch { return null }
+}
+
+function getCookie(req, name) {
+  const header = req.headers.get('Cookie') || ''
+  for (const part of header.split(';')) {
+    const idx = part.indexOf('=')
+    if (idx === -1) continue
+    if (part.slice(0, idx).trim() === name) return decodeURIComponent(part.slice(idx + 1).trim())
+  }
+  return null
+}
+
 export async function onRequest(ctx) {
   const {request:req,env}=ctx
   const u=new URL(req.url)
@@ -105,6 +201,35 @@ export async function onRequest(ctx) {
       })
     }
 
+    // ── Auth sheet (credenciais do admin, nunca expostas) ──
+    async function getAuthConfig(sid){
+      const d = await read(sid, 'Auth')
+      const rows = parseRows(d.values, [])
+      const r = rows[0] || {}
+      return {
+        adminAuthMode: r.adminAuthMode === 'password' ? 'password' : 'google',
+        adminEmail: (r.adminEmail || '').trim().toLowerCase(),
+        adminPasswordHash: r.adminPasswordHash || '',
+      }
+    }
+
+    async function writeAuth(sid, cfg){
+      await sh(sid, 'PUT', 'Auth', 'A1:C2', {
+        values: [
+          ['adminAuthMode', 'adminEmail', 'adminPasswordHash'],
+          [cfg.adminAuthMode, cfg.adminEmail, cfg.adminPasswordHash],
+        ],
+      })
+    }
+
+    async function isAuthedAdmin(req, env, sid){
+      const cfg = await getAuthConfig(sid)
+      if (cfg.adminAuthMode !== 'password') return true // modo google: auth legada client-side
+      const token = getCookie(req, SESSION_COOKIE)
+      const s = await verifySession(env, token)
+      return !!(s && s.role === 'admin')
+    }
+
     // ── Resolve spreadsheet para conferência ──
     async function getConfSpreadsheetId(conferenceId){
       const d=await read(masterSid,'Conferences'),rows=parseRows(d.values,['collaboratorIds'])
@@ -115,15 +240,81 @@ export async function onRequest(ctx) {
     // ─── Health
     if(p==='health') return new Response(JSON.stringify({status:'ok'}),{headers:cors})
 
+    // ─── Auth
+    if(p==='auth/config' && m==='GET'){
+      const cfg = await getAuthConfig(masterSid)
+      return new Response(JSON.stringify({ adminAuthMode: cfg.adminAuthMode, adminEmail: cfg.adminEmail }), { headers: cors })
+    }
+
+    if(p==='auth/me' && m==='GET'){
+      const cfg = await getAuthConfig(masterSid)
+      if (cfg.adminAuthMode !== 'password') {
+        return new Response(JSON.stringify({ authenticated: false, adminAuthMode: 'google' }), { headers: cors })
+      }
+      const token = getCookie(req, SESSION_COOKIE)
+      const s = await verifySession(env, token)
+      if (s && s.role === 'admin') {
+        return new Response(JSON.stringify({ authenticated: true, email: s.sub, adminAuthMode: 'password' }), { headers: cors })
+      }
+      return new Response(JSON.stringify({ authenticated: false, adminAuthMode: 'password' }), { headers: cors })
+    }
+
+    if(p==='auth/login' && m==='POST'){
+      const cfg = await getAuthConfig(masterSid)
+      if (cfg.adminAuthMode !== 'password') {
+        return new Response(JSON.stringify({ error: 'Login por senha não está ativo' }), { status: 403, headers: cors })
+      }
+      const b = await req.json()
+      const email = String(b.email || '').trim().toLowerCase()
+      const password = String(b.password || '')
+      if (!email || !password || email !== cfg.adminEmail || !(await verifyPassword(password, cfg.adminPasswordHash))) {
+        return new Response(JSON.stringify({ error: 'Credenciais inválidas' }), { status: 401, headers: cors })
+      }
+      const exp = Math.floor(Date.now() / 1000) + SESSION_TTL_SECONDS
+      const token = await signSession(env, { sub: email, role: 'admin', exp })
+      const res = new Response(JSON.stringify({ email, role: 'admin' }), { headers: cors })
+      res.headers.append('Set-Cookie', `${SESSION_COOKIE}=${token}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${SESSION_TTL_SECONDS}`)
+      return res
+    }
+
+    if(p==='auth/logout' && m==='POST'){
+      const res = new Response(JSON.stringify({ ok: true }), { headers: cors })
+      res.headers.append('Set-Cookie', `${SESSION_COOKIE}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`)
+      return res
+    }
+
+    if(p==='auth/set-password' && m==='POST'){
+      const cfg = await getAuthConfig(masterSid)
+      const token = getCookie(req, SESSION_COOKIE)
+      const s = await verifySession(env, token)
+      const hasSession = !!(s && s.role === 'admin')
+      // Bootstrap: permite definir credenciais sem sessão apenas enquanto não há admin configurado
+      if (!hasSession && (cfg.adminEmail || cfg.adminAuthMode === 'password')) {
+        return new Response(JSON.stringify({ error: 'Não autorizado' }), { status: 401, headers: cors })
+      }
+      const b = await req.json()
+      const email = String(b.email || '').trim().toLowerCase()
+      const password = String(b.password || '')
+      const mode = b.adminAuthMode === 'password' ? 'password' : 'google'
+      if (!email || !password) {
+        return new Response(JSON.stringify({ error: 'Informe e-mail e senha' }), { status: 400, headers: cors })
+      }
+      const hash = await hashPassword(password)
+      await writeAuth(masterSid, { adminAuthMode: mode, adminEmail: email, adminPasswordHash: hash })
+      return new Response(JSON.stringify({ ok: true, adminAuthMode: mode }), { headers: cors })
+    }
+
     // ─── Conferences
     if(p==='conferences'&&m==='GET'){const d=await read(masterSid,'Conferences');return new Response(JSON.stringify(parseRows(d.values,['collaboratorIds'])),{headers:cors})}
     if(p==='conferences'&&m==='POST'){
+      if(!(await isAuthedAdmin(req,env,masterSid)))return new Response(JSON.stringify({error:'Não autorizado'}),{status:401,headers:cors})
       const b=await req.json();b.id=b.id||uid()
       if(!b.spreadsheetId)b.spreadsheetId=masterSid
       await append(masterSid,'Conferences',b)
       return new Response(JSON.stringify(b),{status:201,headers:cors})
     }
     if(p.match(/^conferences\/[^/]+$/)&&m==='PUT'){
+      if(!(await isAuthedAdmin(req,env,masterSid)))return new Response(JSON.stringify({error:'Não autorizado'}),{status:401,headers:cors})
       const id=p.split('/')[1],b=await req.json()
       const d=await read(masterSid,'Conferences'),rows=parseRows(d.values,['collaboratorIds'])
       const i=rows.findIndex(r=>r.id===id)
@@ -131,6 +322,7 @@ export async function onRequest(ctx) {
       const up={...rows[i],...b};await update(masterSid,'Conferences',i,up);return new Response(JSON.stringify(up),{headers:cors})
     }
     if(p.match(/^conferences\/[^/]+$/)&&m==='DELETE'){
+      if(!(await isAuthedAdmin(req,env,masterSid)))return new Response(JSON.stringify({error:'Não autorizado'}),{status:401,headers:cors})
       const id=p.split('/')[1]
       const d=await read(masterSid,'Conferences'),rows=parseRows(d.values,['collaboratorIds'])
       const i=rows.findIndex(r=>r.id===id)
@@ -170,12 +362,14 @@ export async function onRequest(ctx) {
       return new Response(JSON.stringify(prod),{headers:cors})
     }
     if(p==='products'&&m==='POST'){
+      if(!(await isAuthedAdmin(req,env,masterSid)))return new Response(JSON.stringify({error:'Não autorizado'}),{status:401,headers:cors})
       const b=await req.json();b.id=b.id||uid()
       const sid=await getConfSpreadsheetId(b.conferenceId)
       await append(sid,'Products',b)
       return new Response(JSON.stringify(b),{status:201,headers:cors})
     }
     if(p.match(/^products\/[^/]+$/)&&m==='PUT'){
+      if(!(await isAuthedAdmin(req,env,masterSid)))return new Response(JSON.stringify({error:'Não autorizado'}),{status:401,headers:cors})
       const id=p.split('/')[1],b=await req.json()
       // Encontra o produto e seu spreadsheet
       let sid=masterSid,rows,idx=-1
@@ -192,6 +386,7 @@ export async function onRequest(ctx) {
       const up={...rows[idx],...b};await update(sid,'Products',idx,up);return new Response(JSON.stringify(up),{headers:cors})
     }
     if(p.match(/^products\/[^/]+$/)&&m==='DELETE'){
+      if(!(await isAuthedAdmin(req,env,masterSid)))return new Response(JSON.stringify({error:'Não autorizado'}),{status:401,headers:cors})
       const id=p.split('/')[1]
       let sid=masterSid,rows,idx=-1
       const d0=await read(masterSid,'Products');rows=parseRows(d0.values,['variants']);idx=rows.findIndex(r=>r.id===id)
@@ -222,6 +417,7 @@ export async function onRequest(ctx) {
       return new Response(JSON.stringify(b),{status:201,headers:cors})
     }
     if(p.match(/^orders\/[^/]+$/)&&m==='PUT'){
+      if(!(await isAuthedAdmin(req,env,masterSid)))return new Response(JSON.stringify({error:'Não autorizado'}),{status:401,headers:cors})
       const id=p.split('/')[1],b=await req.json()
       let sid=masterSid,rows,idx=-1
       const d0=await read(masterSid,'Orders');rows=parseRows(d0.values,['items']);idx=rows.findIndex(r=>r.id===id)
@@ -237,6 +433,7 @@ export async function onRequest(ctx) {
       const up={...rows[idx],...b};await update(sid,'Orders',idx,up);return new Response(JSON.stringify(up),{headers:cors})
     }
     if(p.match(/^orders\/[^/]+\/status$/)&&m==='PUT'){
+      if(!(await isAuthedAdmin(req,env,masterSid)))return new Response(JSON.stringify({error:'Não autorizado'}),{status:401,headers:cors})
       const id=p.split('/')[1],b=await req.json()
       let sid=masterSid,rows,idx=-1
       const d0=await read(masterSid,'Orders');rows=parseRows(d0.values,['items']);idx=rows.findIndex(r=>r.id===id)
@@ -252,6 +449,7 @@ export async function onRequest(ctx) {
       const up={...rows[idx],status:b.status};await update(sid,'Orders',idx,up);return new Response(JSON.stringify(up),{headers:cors})
     }
     if(p.match(/^orders\/[^/]+$/)&&m==='DELETE'){
+      if(!(await isAuthedAdmin(req,env,masterSid)))return new Response(JSON.stringify({error:'Não autorizado'}),{status:401,headers:cors})
       const id=p.split('/')[1]
       let sid=masterSid,rows,idx=-1
       const d0=await read(masterSid,'Orders');rows=parseRows(d0.values,['items']);idx=rows.findIndex(r=>r.id===id)
@@ -285,6 +483,7 @@ export async function onRequest(ctx) {
     if(p==='users'&&m==='GET'){const d=await read(masterSid,'Users');return new Response(JSON.stringify(parseRows(d.values,['conferenceIds'])),{headers:cors})}
     if(p==='users'&&m==='POST'){const b=await req.json();b.id=b.id||uid();await append(masterSid,'Users',b);return new Response(JSON.stringify(b),{status:201,headers:cors})}
     if(p.match(/^users\/[^/]+$/)&&m==='PUT'){
+      if(!(await isAuthedAdmin(req,env,masterSid)))return new Response(JSON.stringify({error:'Não autorizado'}),{status:401,headers:cors})
       const id=p.split('/')[1],b=await req.json()
       const d=await read(masterSid,'Users'),rows=parseRows(d.values,['conferenceIds'])
       const i=rows.findIndex(r=>r.id===id)
@@ -298,11 +497,23 @@ export async function onRequest(ctx) {
     }
 
     // ─── Config
-    if(p==='config'&&m==='GET'){const d=await read(masterSid,'Config'),items=parseRows(d.values,[]);return new Response(JSON.stringify(items[0]||{mode:'closed',allowedAdminDomain:null,setupCompleted:false}),{headers:cors})}
-    if(p==='config'&&m==='PUT'){const b=await req.json();const d=await read(masterSid,'Config'),rows=parseRows(d.values,[]);if(rows.length)await update(masterSid,'Config',0,b);else await append(masterSid,'Config',b);return new Response(JSON.stringify(b),{headers:cors})}
+    if(p==='config'&&m==='GET'){
+      const d=await read(masterSid,'Config'),items=parseRows(d.values,[]);
+      const cfg=items[0]||{mode:'closed',allowedAdminDomain:null,setupCompleted:false};
+      const ac=await getAuthConfig(masterSid);
+      cfg.adminAuthMode=ac.adminAuthMode;
+      return new Response(JSON.stringify(cfg),{headers:cors})
+    }
+    if(p==='config'&&m==='PUT'){
+      if(!(await isAuthedAdmin(req,env,masterSid)))return new Response(JSON.stringify({error:'Não autorizado'}),{status:401,headers:cors})
+      const b=await req.json();const d=await read(masterSid,'Config'),rows=parseRows(d.values,[]);
+      if(rows.length){const up={...rows[0],...b};await update(masterSid,'Config',0,up);return new Response(JSON.stringify(up),{headers:cors})}
+      await append(masterSid,'Config',b);return new Response(JSON.stringify(b),{headers:cors})
+    }
 
     // ─── Drive Setup
     if(p==='setup/drive'&&m==='POST'){
+      if(!(await isAuthedAdmin(req,env,masterSid)))return new Response(JSON.stringify({error:'Não autorizado'}),{status:401,headers:cors})
       async function ffc(name,parent){
         const q=parent?"'"+parent+"' in parents and name='"+name+"' and mimeType='application/vnd.google-apps.folder' and trashed=false":"name='"+name+"' and mimeType='application/vnd.google-apps.folder' and trashed=false"
         const l=await fetch('https://www.googleapis.com/drive/v3/files?q='+encodeURIComponent(q)+'&fields=files(id)',{headers:authH})
@@ -319,6 +530,7 @@ export async function onRequest(ctx) {
 
     // ─── Upload (converte para data URL, armazenamento sem Drive)
     if(p.startsWith('upload/')&&m==='POST'){
+      if(!(await isAuthedAdmin(req,env,masterSid)))return new Response(JSON.stringify({error:'Não autorizado'}),{status:401,headers:cors})
       const form=await req.formData()
       const file=form.get('image')
       if(!file||typeof file==='string')return new Response(JSON.stringify({error:'No image file'}),{status:400,headers:cors})
