@@ -3,18 +3,13 @@
  * Popup → Google → redirect → localStorage → parent processa token.
  */
 import { api } from './api'
+import type { UserRole } from '@/types'
 
 const CLIENT_ID = (import.meta.env.VITE_OAUTH_CLIENT_ID as string) || ''
 
-function decodeJwt(token: string): Record<string, any> | null {
-  try {
-    const parts = token.split('.')
-    if (parts.length !== 3) return null
-    return JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')))
-  } catch { return null }
-}
-
 async function handleToken(accessToken: string) {
+  // Mantém o token salvo para operações no Drive (criar planilha da conferência, etc.)
+  localStorage.setItem('oauth_token', accessToken)
   const res = await fetch(`https://www.googleapis.com/oauth2/v3/userinfo?access_token=${accessToken}`)
   const profile = await res.json()
   if (!profile.email) throw new Error('Não foi possível obter perfil')
@@ -23,7 +18,7 @@ async function handleToken(accessToken: string) {
   let user = await api.users.getByEmail(email)
   if (!user) {
     // Verifica se deve ser admin
-    let role = 'user'
+    let role: UserRole = 'user'
     try {
       const cfg = await api.users.getConfig()
       if (cfg.mode === 'open') role = 'admin'

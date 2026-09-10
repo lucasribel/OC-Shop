@@ -31,7 +31,7 @@ export function AdminLayout({ children }: AdminLayoutProps) {
     // Usa dados da navegação se veio de criação de conferência (evita Sheets lag)
     const stateConf = (location.state as any)?.conference
     if (stateConf && stateConf.slug === slug) {
-      if (!hasConferenceAccess(stateConf.id)) { navigate('/admin', { replace: true }); return }
+      if (!hasConferenceAccess(stateConf)) { navigate('/admin', { replace: true }); return }
       setConference(stateConf)
       setLoading(false)
       return
@@ -43,7 +43,7 @@ export function AdminLayout({ children }: AdminLayoutProps) {
       api.conferences.getBySlug(slug).then((conf) => {
         attempts++
         if (conf) {
-          if (!hasConferenceAccess(conf.id)) { navigate('/admin', { replace: true }); return }
+          if (!hasConferenceAccess(conf)) { navigate('/admin', { replace: true }); return }
           setConference(conf); setLoading(false)
           return
         }

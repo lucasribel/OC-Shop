@@ -1,7 +1,14 @@
 import { create } from 'zustand'
+import { persist } from 'zustand/middleware'
 import type { User } from '@/types'
 import { signInWithGoogle, signOut } from '@/services/auth'
 import { isGoogleAuthConfigured } from '@/services/googleAuth'
+
+interface ConferenceAccess {
+  id: string
+  ownerId: string
+  collaboratorIds?: string[]
+}
 
 interface AuthState {
   user: User | null
@@ -13,10 +20,12 @@ interface AuthState {
   isAdmin: () => boolean
   isCollaborator: () => boolean
   isSuperAdmin: () => boolean
-  hasConferenceAccess: (conferenceId: string) => boolean
+  hasConferenceAccess: (conference: ConferenceAccess) => boolean
 }
 
-export const useAuthStore = create<AuthState>((set, get) => ({
+export const useAuthStore = create<AuthState>()(
+  persist(
+    (set, get) => ({
   user: null,
   loading: false,
   error: null,
@@ -39,7 +48,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       window.addEventListener('ocshop:login-error', handleErrorEvent, { once: true })
 
       // Dispara o login
-      const result = await signInWithGoogle()
+      await signInWithGoogle()
 
       // Timeout de segurança
       setTimeout(() => {
@@ -76,10 +85,18 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   isSuperAdmin: () => get().user?.role === 'super_admin',
 
-  hasConferenceAccess: (conferenceId: string) => {
+  hasConferenceAccess: (conference) => {
     const user = get().user
     if (!user) return false
     if (user.role === 'super_admin') return true
-    return user.conferenceIds?.includes(conferenceId) ?? false
+    if (conference.ownerId === user.id) return true
+    if (conference.collaboratorIds?.includes(user.id)) return true
+    return user.conferenceIds?.includes(conference.id) ?? false
   },
-}))
+    }),
+    {
+      name: 'oc-shop-auth',
+      partialize: (state) => ({ user: state.user }),
+    }
+  )
+)

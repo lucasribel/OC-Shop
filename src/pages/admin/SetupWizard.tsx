@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useAuthStore } from '@/store/useAuthStore'
 import { isGoogleAuthConfigured } from '@/services/googleAuth'
 const STEPS = [
   { id: 'google-cloud', title: 'Google Cloud', subtitle: 'Criar projeto e ativar APIs' },
@@ -22,7 +21,6 @@ function StepNumber({ n, active, done }: { n: number; active: boolean; done: boo
 
 export default function SetupWizard() {
   const navigate = useNavigate()
-  const { user } = useAuthStore()
 
   // Restaura estado do sessionStorage (sobrevive a reload do Vite)
   const saved = JSON.parse(sessionStorage.getItem('wizard_state') || '{}')
