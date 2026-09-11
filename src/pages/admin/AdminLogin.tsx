@@ -78,7 +78,8 @@ export default function AdminLogin() {
               <div className="animate-spin h-6 w-6 border-4 border-[#037EF3] border-t-transparent rounded-full" />
             </div>
           ) : authMode === 'password' ? (
-            formMode === 'login' ? (
+            <>
+              {formMode === 'login' ? (
               <form onSubmit={handlePasswordSubmit} className="space-y-4">
                 <input
                   type="email"
@@ -162,7 +163,13 @@ export default function AdminLogin() {
                   Já tenho conta — Entrar
                 </button>
               </form>
-            )
+              )}
+              <div className="pt-4 mt-1 border-t border-gray-100">
+                <button type="button" onClick={handleGoogleLogin} className="text-xs text-gray-400 hover:text-[#037EF3] transition-colors">
+                  Entrar com Google (superadmin)
+                </button>
+              </div>
+            </>
           ) : (
             <>
               <button onClick={handleGoogleLogin} disabled={loading}
