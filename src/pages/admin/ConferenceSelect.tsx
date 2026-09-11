@@ -37,8 +37,13 @@ function NewConferenceModal({ open, onClose, onCreated }: {
     if (!user) return
     setSaving(true); setError(null)
     try {
-      // Cria planilha no Drive do usuário
-      const spreadsheetId = await createConferenceSpreadsheet(name.trim())
+      // Tenta criar planilha no Drive do usuário; sem Google, usa a planilha master
+      let spreadsheetId: string | undefined
+      try {
+        spreadsheetId = await createConferenceSpreadsheet(name.trim())
+      } catch {
+        spreadsheetId = undefined
+      }
       const conf = await api.conferences.create({
         name: name.trim(), slug: slug.trim(), aiesec: user.aiesec ?? '',
         active: status === 'open', status, startDate, endDate, orderDeadline,
