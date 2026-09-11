@@ -10,12 +10,14 @@ const MOCK_EMAILS = ['super@aiesec.net', 'admin@aiesec.net', 'ana@aiesec.net']
 
 export default function AdminLogin() {
   const navigate = useNavigate()
-  const { user, setUser, login, loginWithPassword, loading, error } = useAuthStore()
+  const { user, setUser, login, loginWithPassword, registerAdmin, loading, error } = useAuthStore()
   const [allowedDomain, setAllowedDomain] = useState<string | null>(null)
   const [authMode, setAuthMode] = useState<'google' | 'password'>('google')
   const [modeLoading, setModeLoading] = useState(true)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [name, setName] = useState('')
+  const [formMode, setFormMode] = useState<'login' | 'register'>('login')
   const oauthReady = isGoogleAuthConfigured()
 
   useEffect(() => {
@@ -50,6 +52,12 @@ export default function AdminLogin() {
     await loginWithPassword(email.trim(), password)
   }
 
+  const handleRegisterSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!name.trim() || !email.trim() || !password) return
+    await registerAdmin(email.trim(), name.trim(), password)
+  }
+
   return (
     <div className="min-h-screen bg-[#F4F6F9] flex items-center justify-center px-4">
       <div className="w-full max-w-sm">
@@ -70,36 +78,91 @@ export default function AdminLogin() {
               <div className="animate-spin h-6 w-6 border-4 border-[#037EF3] border-t-transparent rounded-full" />
             </div>
           ) : authMode === 'password' ? (
-            <form onSubmit={handlePasswordSubmit} className="space-y-4">
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="E-mail do administrador"
-                autoComplete="username"
-                required
-                className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#037EF3]/20 focus:border-[#037EF3]"
-              />
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="Senha"
-                autoComplete="current-password"
-                required
-                className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#037EF3]/20 focus:border-[#037EF3]"
-              />
-              {error && (
-                <div className="p-3 rounded-lg bg-red-50 border border-red-200 text-sm text-red-700">{error}</div>
-              )}
-              <button
-                type="submit"
-                disabled={loading}
-                className="w-full flex items-center justify-center gap-2 px-5 py-3 rounded-xl text-sm font-semibold bg-[#037EF3] text-white hover:bg-[#0256B0] transition-all disabled:opacity-50"
-              >
-                {loading ? 'Entrando...' : 'Entrar'}
-              </button>
-            </form>
+            formMode === 'login' ? (
+              <form onSubmit={handlePasswordSubmit} className="space-y-4">
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="E-mail"
+                  autoComplete="username"
+                  required
+                  className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#037EF3]/20 focus:border-[#037EF3]"
+                />
+                <input
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Senha"
+                  autoComplete="current-password"
+                  required
+                  className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#037EF3]/20 focus:border-[#037EF3]"
+                />
+                {error && (
+                  <div className="p-3 rounded-lg bg-red-50 border border-red-200 text-sm text-red-700">{error}</div>
+                )}
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="w-full flex items-center justify-center gap-2 px-5 py-3 rounded-xl text-sm font-semibold bg-[#037EF3] text-white hover:bg-[#0256B0] transition-all disabled:opacity-50"
+                >
+                  {loading ? 'Entrando...' : 'Entrar'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setFormMode('register'); setPassword('') }}
+                  className="w-full text-sm text-[#037EF3] hover:underline"
+                >
+                  Não tem conta? Criar conta
+                </button>
+              </form>
+            ) : (
+              <form onSubmit={handleRegisterSubmit} className="space-y-4">
+                <input
+                  type="text"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="Seu nome"
+                  required
+                  className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#037EF3]/20 focus:border-[#037EF3]"
+                />
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="E-mail"
+                  autoComplete="username"
+                  required
+                  className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#037EF3]/20 focus:border-[#037EF3]"
+                />
+                <input
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Senha (mín. 6 caracteres)"
+                  autoComplete="new-password"
+                  required
+                  className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#037EF3]/20 focus:border-[#037EF3]"
+                />
+                {error && (
+                  <div className="p-3 rounded-lg bg-red-50 border border-red-200 text-sm text-red-700">{error}</div>
+                )}
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="w-full flex items-center justify-center gap-2 px-5 py-3 rounded-xl text-sm font-semibold bg-[#037EF3] text-white hover:bg-[#0256B0] transition-all disabled:opacity-50"
+                >
+                  {loading ? 'Criando...' : 'Criar conta e entrar'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setFormMode('login'); setPassword('') }}
+                  className="w-full text-sm text-[#037EF3] hover:underline"
+                >
+                  Já tenho conta — Entrar
+                </button>
+              </form>
+            )
           ) : (
             <>
               <button onClick={handleGoogleLogin} disabled={loading}

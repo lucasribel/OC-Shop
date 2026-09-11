@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import type { User } from '@/types'
-import { signInWithGoogle, signOut, loginWithPassword, logoutSession, restoreSession } from '@/services/auth'
+import { signInWithGoogle, signOut, loginWithPassword, registerAdmin, logoutSession, restoreSession } from '@/services/auth'
 import { isGoogleAuthConfigured } from '@/services/googleAuth'
 
 interface ConferenceAccess {
@@ -17,6 +17,7 @@ interface AuthState {
   buyerEmail: string | null
   login: () => Promise<void>
   loginWithPassword: (email: string, password: string) => Promise<void>
+  registerAdmin: (email: string, name: string, password: string) => Promise<void>
   logout: () => Promise<void>
   setUser: (user: User | null) => void
   setBuyerEmail: (email: string) => void
@@ -79,6 +80,16 @@ export const useAuthStore = create<AuthState>()(
       set({ user, loading: false })
     } catch (e) {
       set({ error: e instanceof Error ? e.message : 'Falha ao entrar', loading: false })
+    }
+  },
+
+  registerAdmin: async (email, name, password) => {
+    set({ loading: true, error: null })
+    try {
+      const user = await registerAdmin(email, name, password)
+      set({ user, loading: false })
+    } catch (e) {
+      set({ error: e instanceof Error ? e.message : 'Falha ao criar conta', loading: false })
     }
   },
 

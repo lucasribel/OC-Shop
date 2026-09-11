@@ -201,33 +201,83 @@ export async function onRequest(ctx) {
       })
     }
 
-    // ── Auth sheet (credenciais do admin, nunca expostas) ──
-    async function getAuthConfig(sid){
-      const d = await read(sid, 'Auth')
-      const rows = parseRows(d.values, [])
-      const r = rows[0] || {}
-      return {
-        adminAuthMode: r.adminAuthMode === 'password' ? 'password' : 'google',
-        adminEmail: (r.adminEmail || '').trim().toLowerCase(),
-        adminPasswordHash: r.adminPasswordHash || '',
-      }
-    }
-
-    async function writeAuth(sid, cfg){
-      await sh(sid, 'PUT', 'Auth', 'A1:C2', {
-        values: [
-          ['adminAuthMode', 'adminEmail', 'adminPasswordHash'],
-          [cfg.adminAuthMode, cfg.adminEmail, cfg.adminPasswordHash],
-        ],
+    async function ensureSheet(sid, title){
+      const meta = await fetch('https://sheets.googleapis.com/v4/spreadsheets/' + sid, { headers: authH })
+      const mj = await meta.json()
+      if (mj.sheets && mj.sheets.some(s => s.properties.title === title)) return
+      await fetch('https://sheets.googleapis.com/v4/spreadsheets/' + sid + ':batchUpdate', {
+        method: 'POST',
+        headers: { ...authH, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ requests: [{ addSheet: { properties: { title } } }] }),
       })
     }
 
+    // ── Auth: modo de login + senhas por usuário (nunca expostas) ──
+    async function getAuthMode(sid){
+      try {
+        const d = await read(sid, 'Auth')
+        const rows = parseRows(d.values, [])
+        return (rows[0] && rows[0].adminAuthMode) === 'password' ? 'password' : 'google'
+      } catch { return 'google' }
+    }
+
+    async function writeAuthMode(sid, mode){
+      await ensureSheet(sid, 'Auth')
+      await sh(sid, 'PUT', 'Auth', 'A1:A2?valueInputOption=RAW', { values: [['adminAuthMode'], [mode]] })
+    }
+
+    function isAdminRole(role){
+      return role === 'admin' || role === 'super_admin' || role === 'collaborator'
+    }
+
+    async function listUsers(sid){
+      const d = await read(sid, 'Users')
+      return parseRows(d.values, ['conferenceIds'])
+    }
+
+    async function getUserByEmail(sid, email){
+      const users = await listUsers(sid)
+      return users.find(u => u.email === email) || null
+    }
+
+    async function getUserById(sid, id){
+      const users = await listUsers(sid)
+      return users.find(u => u.id === id) || null
+    }
+
+    async function getPasswordHash(sid, email){
+      const d = await read(sid, 'Passwords')
+      const rows = parseRows(d.values, [])
+      const r = rows.find(x => x.email === email)
+      return (r && r.passwordHash) || ''
+    }
+
+    async function upsertPassword(sid, email, hash){
+      await ensureSheet(sid, 'Passwords')
+      const d = await read(sid, 'Passwords')
+      const values = d.values || []
+      const hasHeader = values.length >= 1 && values[0] && values[0][0] === 'email'
+      let rowIdx = -1
+      if (hasHeader) {
+        for (let i = 1; i < values.length; i++) {
+          if (values[i] && values[i][0] === email) { rowIdx = i; break }
+        }
+      }
+      if (!hasHeader) {
+        await sh(sid, 'PUT', 'Passwords', 'A1:B2?valueInputOption=RAW', { values: [['email', 'passwordHash'], [email, hash]] })
+      } else if (rowIdx >= 0) {
+        await sh(sid, 'PUT', 'Passwords', `A${rowIdx + 1}:B${rowIdx + 1}?valueInputOption=RAW`, { values: [[email, hash]] })
+      } else {
+        await sh(sid, 'POST', 'Passwords', 'A1:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS', { values: [[email, hash]] })
+      }
+    }
+
     async function isAuthedAdmin(req, env, sid){
-      const cfg = await getAuthConfig(sid)
-      if (cfg.adminAuthMode !== 'password') return true // modo google: auth legada client-side
+      const mode = await getAuthMode(sid)
+      if (mode !== 'password') return true // modo google: auth legada client-side
       const token = getCookie(req, SESSION_COOKIE)
       const s = await verifySession(env, token)
-      return !!(s && s.role === 'admin')
+      return !!(s && isAdminRole(s.role))
     }
 
     // ── Resolve spreadsheet para conferência ──
@@ -242,37 +292,55 @@ export async function onRequest(ctx) {
 
     // ─── Auth
     if(p==='auth/config' && m==='GET'){
-      const cfg = await getAuthConfig(masterSid)
-      return new Response(JSON.stringify({ adminAuthMode: cfg.adminAuthMode, adminEmail: cfg.adminEmail }), { headers: cors })
+      return new Response(JSON.stringify({ adminAuthMode: await getAuthMode(masterSid) }), { headers: cors })
     }
 
-    if(p==='auth/me' && m==='GET'){
-      const cfg = await getAuthConfig(masterSid)
-      if (cfg.adminAuthMode !== 'password') {
-        return new Response(JSON.stringify({ authenticated: false, adminAuthMode: 'google' }), { headers: cors })
+    if(p==='auth/register' && m==='POST'){
+      const b = await req.json()
+      const email = String(b.email || '').trim().toLowerCase()
+      const name = String(b.name || '').trim()
+      const password = String(b.password || '')
+      if (!email || !name || password.length < 6) {
+        return new Response(JSON.stringify({ error: 'Informe nome, e-mail válido e senha com pelo menos 6 caracteres' }), { status: 400, headers: cors })
       }
-      const token = getCookie(req, SESSION_COOKIE)
-      const s = await verifySession(env, token)
-      if (s && s.role === 'admin') {
-        return new Response(JSON.stringify({ authenticated: true, email: s.sub, adminAuthMode: 'password' }), { headers: cors })
+      const existing = await getUserByEmail(masterSid, email)
+      if (existing && (await getPasswordHash(masterSid, email))) {
+        return new Response(JSON.stringify({ error: 'Este e-mail já está cadastrado. Faça login.' }), { status: 409, headers: cors })
       }
-      return new Response(JSON.stringify({ authenticated: false, adminAuthMode: 'password' }), { headers: cors })
+      const hash = await hashPassword(password)
+      await upsertPassword(masterSid, email, hash)
+
+      let user
+      if (existing) {
+        user = existing // vincula senha à conta existente (ex: admin/super_admin que veio do Google)
+      } else {
+        const users = await listUsers(masterSid)
+        const role = users.length === 0 ? 'super_admin' : 'admin'
+        user = { id: uid(), email, name, role, conferenceIds: [] }
+        await append(masterSid, 'Users', user)
+      }
+
+      const exp = Math.floor(Date.now() / 1000) + SESSION_TTL_SECONDS
+      const token = await signSession(env, { sub: user.id, email: user.email, role: user.role, exp })
+      const res = new Response(JSON.stringify(user), { headers: cors })
+      res.headers.append('Set-Cookie', `${SESSION_COOKIE}=${token}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${SESSION_TTL_SECONDS}`)
+      return res
     }
 
     if(p==='auth/login' && m==='POST'){
-      const cfg = await getAuthConfig(masterSid)
-      if (cfg.adminAuthMode !== 'password') {
-        return new Response(JSON.stringify({ error: 'Login por senha não está ativo' }), { status: 403, headers: cors })
-      }
       const b = await req.json()
       const email = String(b.email || '').trim().toLowerCase()
       const password = String(b.password || '')
-      if (!email || !password || email !== cfg.adminEmail || !(await verifyPassword(password, cfg.adminPasswordHash))) {
+      if (!email || !password) {
+        return new Response(JSON.stringify({ error: 'Credenciais inválidas' }), { status: 401, headers: cors })
+      }
+      const user = await getUserByEmail(masterSid, email)
+      if (!user || !isAdminRole(user.role) || !(await verifyPassword(password, await getPasswordHash(masterSid, email)))) {
         return new Response(JSON.stringify({ error: 'Credenciais inválidas' }), { status: 401, headers: cors })
       }
       const exp = Math.floor(Date.now() / 1000) + SESSION_TTL_SECONDS
-      const token = await signSession(env, { sub: email, role: 'admin', exp })
-      const res = new Response(JSON.stringify({ email, role: 'admin' }), { headers: cors })
+      const token = await signSession(env, { sub: user.id, email: user.email, role: user.role, exp })
+      const res = new Response(JSON.stringify(user), { headers: cors })
       res.headers.append('Set-Cookie', `${SESSION_COOKIE}=${token}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${SESSION_TTL_SECONDS}`)
       return res
     }
@@ -283,24 +351,29 @@ export async function onRequest(ctx) {
       return res
     }
 
-    if(p==='auth/set-password' && m==='POST'){
-      const cfg = await getAuthConfig(masterSid)
+    if(p==='auth/me' && m==='GET'){
+      const mode = await getAuthMode(masterSid)
+      if (mode !== 'password') {
+        return new Response(JSON.stringify({ authenticated: false, adminAuthMode: 'google' }), { headers: cors })
+      }
       const token = getCookie(req, SESSION_COOKIE)
       const s = await verifySession(env, token)
-      const hasSession = !!(s && s.role === 'admin')
-      // Bootstrap: permite definir credenciais sem sessão apenas enquanto não há admin configurado
-      if (!hasSession && (cfg.adminEmail || cfg.adminAuthMode === 'password')) {
+      if (s && isAdminRole(s.role)) {
+        const user = (await getUserById(masterSid, s.sub)) || (await getUserByEmail(masterSid, s.email))
+        if (user) {
+          return new Response(JSON.stringify({ authenticated: true, adminAuthMode: 'password', user }), { headers: cors })
+        }
+      }
+      return new Response(JSON.stringify({ authenticated: false, adminAuthMode: 'password' }), { headers: cors })
+    }
+
+    if(p==='auth/set-mode' && m==='POST'){
+      if (!(await isAuthedAdmin(req, env, masterSid))) {
         return new Response(JSON.stringify({ error: 'Não autorizado' }), { status: 401, headers: cors })
       }
       const b = await req.json()
-      const email = String(b.email || '').trim().toLowerCase()
-      const password = String(b.password || '')
       const mode = b.adminAuthMode === 'password' ? 'password' : 'google'
-      if (!email || !password) {
-        return new Response(JSON.stringify({ error: 'Informe e-mail e senha' }), { status: 400, headers: cors })
-      }
-      const hash = await hashPassword(password)
-      await writeAuth(masterSid, { adminAuthMode: mode, adminEmail: email, adminPasswordHash: hash })
+      await writeAuthMode(masterSid, mode)
       return new Response(JSON.stringify({ ok: true, adminAuthMode: mode }), { headers: cors })
     }
 
@@ -500,8 +573,7 @@ export async function onRequest(ctx) {
     if(p==='config'&&m==='GET'){
       const d=await read(masterSid,'Config'),items=parseRows(d.values,[]);
       const cfg=items[0]||{mode:'closed',allowedAdminDomain:null,setupCompleted:false};
-      const ac=await getAuthConfig(masterSid);
-      cfg.adminAuthMode=ac.adminAuthMode;
+      cfg.adminAuthMode=await getAuthMode(masterSid);
       return new Response(JSON.stringify(cfg),{headers:cors})
     }
     if(p==='config'&&m==='PUT'){

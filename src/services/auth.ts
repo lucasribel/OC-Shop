@@ -51,12 +51,6 @@ export async function getAuthConfig(): Promise<AuthConfig> {
   return res.json()
 }
 
-async function userByEmailOrSynthetic(email: string): Promise<User> {
-  const existing = await api.users.getByEmail(email).catch(() => null)
-  if (existing) return existing
-  return { id: 'admin-password', email, name: email.split('@')[0] || email, role: 'super_admin', conferenceIds: [] }
-}
-
 export async function loginWithPassword(email: string, password: string): Promise<User> {
   const base = authBase()
   if (!base) throw new Error('Backend indisponível')
@@ -70,8 +64,23 @@ export async function loginWithPassword(email: string, password: string): Promis
     const err = await res.json().catch(() => ({ error: 'Falha ao entrar' }))
     throw new Error(err.error || 'Credenciais inválidas')
   }
-  const data = await res.json()
-  return userByEmailOrSynthetic(data.email)
+  return res.json()
+}
+
+export async function registerAdmin(email: string, name: string, password: string): Promise<User> {
+  const base = authBase()
+  if (!base) throw new Error('Backend indisponível')
+  const res = await fetch(`${base}/auth/register`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, name, password }),
+    credentials: 'include',
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: 'Falha ao criar conta' }))
+    throw new Error(err.error || 'Falha ao criar conta')
+  }
+  return res.json()
 }
 
 export async function logoutSession(): Promise<void> {
@@ -87,18 +96,17 @@ export async function restoreSession(): Promise<{ user: User | null; adminAuthMo
   if (!res || !res.ok) return { user: null, adminAuthMode: 'google' }
   const data = await res.json()
   const mode: 'google' | 'password' = data.adminAuthMode === 'password' ? 'password' : 'google'
-  if (mode !== 'password') return { user: null, adminAuthMode: mode }
-  if (!data.authenticated || !data.email) return { user: null, adminAuthMode: 'password' }
-  return { user: await userByEmailOrSynthetic(data.email), adminAuthMode: 'password' }
+  if (mode !== 'password' || !data.authenticated || !data.user) return { user: null, adminAuthMode: mode }
+  return { user: data.user, adminAuthMode: 'password' }
 }
 
-export async function setAdminPassword(email: string, password: string, adminAuthMode: 'google' | 'password'): Promise<void> {
+export async function setAuthMode(adminAuthMode: 'google' | 'password'): Promise<void> {
   const base = authBase()
   if (!base) throw new Error('Backend indisponível')
-  const res = await fetch(`${base}/auth/set-password`, {
+  const res = await fetch(`${base}/auth/set-mode`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email, password, adminAuthMode }),
+    body: JSON.stringify({ adminAuthMode }),
     credentials: 'include',
   })
   if (!res.ok) {

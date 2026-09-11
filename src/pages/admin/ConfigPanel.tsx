@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api } from '@/services/api'
 import { useAuthStore } from '@/store/useAuthStore'
-import { getAuthConfig, setAdminPassword as saveAdminPassword } from '@/services/auth'
+import { getAuthConfig, setAuthMode as saveAuthMode } from '@/services/auth'
 import { AdminSystemLayout } from '@/components/layout/AdminSystemLayout'
 import type { SystemConfig } from '@/types'
 
@@ -146,8 +146,6 @@ export default function ConfigPanel() {
   const [hardResetConfirm, setHardResetConfirm] = useState('')
 
   const [authMode, setAuthMode] = useState<'google' | 'password'>('google')
-  const [adminEmail, setAdminEmail] = useState('')
-  const [adminPassword, setAdminPassword] = useState('')
   const [authSaving, setAuthSaving] = useState(false)
   const [authMsg, setAuthMsg] = useState<string | null>(null)
   const [authError, setAuthError] = useState<string | null>(null)
@@ -160,25 +158,19 @@ export default function ConfigPanel() {
 
     getAuthConfig().then((cfg) => {
       setAuthMode(cfg.adminAuthMode)
-      setAdminEmail(cfg.adminEmail ?? '')
     }).catch(() => {})
   }, [])
 
   const handleSaveAuth = async () => {
-    if (!adminEmail.trim() || !adminPassword) {
-      setAuthError('Informe o e-mail do admin e uma senha')
-      return
-    }
     setAuthSaving(true)
     setAuthError(null)
     setAuthMsg(null)
     try {
-      await saveAdminPassword(adminEmail.trim(), adminPassword, authMode)
-      setAdminPassword('')
-      setAuthMsg('Autenticação salva com sucesso!')
+      await saveAuthMode(authMode)
+      setAuthMsg('Modo de login salvo com sucesso!')
       setTimeout(() => setAuthMsg(null), 3000)
     } catch (e) {
-      setAuthError(e instanceof Error ? e.message : 'Erro ao salvar autenticação')
+      setAuthError(e instanceof Error ? e.message : 'Erro ao salvar')
     } finally {
       setAuthSaving(false)
     }
@@ -404,7 +396,7 @@ export default function ConfigPanel() {
               <div className="p-5 rounded-lg border border-gray-200">
                 <h3 className="font-display text-base font-semibold text-[#1A1A2E] mb-1">Autenticação do administrador</h3>
                 <p className="text-sm text-gray-500 mb-4">
-                  Como o admin entra no painel. Em modo senha, o login usa e-mail + senha (a senha é armazenada com hash). Em modo Google, usa o login do Google.
+                  Como os organizadores entram no painel. Em modo senha, cada admin cria a própria conta (e-mail + senha, com hash) na tela de login. Em modo Google, usa o login do Google.
                 </p>
                 <div className="space-y-4">
                   <div className="flex items-center gap-4">
@@ -418,19 +410,6 @@ export default function ConfigPanel() {
                     </button>
                     <span className={`text-sm font-medium ${authMode === 'password' ? 'text-[#1A1A2E]' : 'text-gray-400'}`}>Senha</span>
                   </div>
-                  <InputField
-                    label="E-mail do administrador"
-                    value={adminEmail}
-                    onChange={setAdminEmail}
-                    placeholder="admin@aiesec.net"
-                  />
-                  <InputField
-                    label="Senha"
-                    value={adminPassword}
-                    onChange={setAdminPassword}
-                    placeholder="Digite uma senha forte"
-                    type="password"
-                  />
                   <div className="flex items-center gap-4">
                     <button
                       type="button"
